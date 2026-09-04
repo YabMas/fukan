@@ -64,11 +64,14 @@
    `:slot/<card>` edges (see the ns doc), not declared here; `:tag` is the
    instance-join key (an instance's mirror-stringified `:structure/of` names the
    Structure whose `:val/tag` is its colon-prefixed form); a realized concept
-   carries its membership datalog as the `:form` payload of `:realizes`."
+   carries its membership datalog as the `:form` payload of `:realizes`, and a SPECIES the genus
+   its declaration named as a `:sub` edge — an edge rather than a payload because a genus is a
+   reflected node, so the meta-grammar gains the relation and a reader can walk it."
   {:tag      :string
    :value    [:? :boolean]
    :law      [:* Law]
-   :realizes [:? {:payload :form} :string]}
+   :realizes [:? {:payload :form} :string]
+   :sub      [:? Structure]}
   ;; TOTALITY — the reflector's self-check. A Structure's identity IS its defining namespace, so every
   ;; reified Structure is the target of a `:child` edge from its `Vocabulary`. The synthetic `:Any`
   ;; wildcard is not an authored Structure, so it is exempt (:unless its tag is ":Any"). A missing
@@ -169,9 +172,9 @@
   "Expand seed namespaces to a fixpoint through everything a presentation fragment in scope REACHES: its
    structures' slot targets, its correspondences' fact tags, and — resolved through
    `resolve-call` (rule name → declaring ns) — the rules its laws and owned relation elements
-   call. So a reified slot's target Structure, a Correspondence's codomain, and every imported
-   vocabulary (even one contributing only relations, like a genus-declaring primitive vocab)
-   are always present."
+   call, and the genus each species names. So a reified slot's target Structure, a
+   Correspondence's codomain, a species' genus, and every imported vocabulary (even one
+   contributing only relations, like a genus-declaring primitive vocab) are always present."
   [seed resolve-call]
   (loop [nss (set seed)]
     (let [nxt (into nss
@@ -179,6 +182,7 @@
                      (for [sd (s/all-structures)
                            :when (contains? nss (some-> (:tag sd) namespace))
                            n    (concat (keep target-ns (mapcat #(or (:alts %) [(:target %)]) (:slots sd)))
+                                        (keep target-ns [(:sub sd)])
                                         (keep (fn [c] (when (= (:design c) (:tag sd)) (target-ns (:fact c))))
                                               (s/all-corresponds))
                                         (keep resolve-call (rule-calls (sdef-clauses sd))))
@@ -193,9 +197,14 @@
 
 (defn- reflect-structure
   "One sdef → {:nodes … :rels …} for its Structure node, Law children, slot edges,
-   and any Schema value targets."
-  [{:keys [tag doc slots laws value? realized-as]}]
+   the genus it names, and any Schema value targets."
+  [{:keys [tag doc laws value? realized-as sub] :as sdef}]
   (let [sid  (structure-id tag)
+        ;; the AUTHORED slots, not the effective ones: this graph is a presentation of
+        ;; DECLARATIONS, and the print-dual reads it back as the declaration somebody wrote. A
+        ;; species rendered with its genus's slots spliced in would no longer be the form it
+        ;; renders. The checker reads the effective set straight off the sdef and is unaffected.
+        slots (s/authored-slots sdef)
         ;; a correspondence is NOT stamped here: the bridge reflects as its own `Correspondence` node
         ;; (see `reflect-correspondence`), decomposed — not a payload blob on the design Structure.
         node (cond-> {:entity/id sid :structure/of ::Structure
@@ -228,6 +237,13 @@
                          (mk "" (:id sub) sub false))
                        (mk "" (structure-id (:target sl)) nil (= :Any (:target sl))))]))))
              (mapcat identity))
+        ;; the genus is a declared POSITION, so it reflects as what the declaration NAMED — never
+        ;; inferred from a membership body or a slots map, which is what lets the print-dual emit
+        ;; it back from the graph alone.
+        genus-rel (when sub
+                      {:rel/id   (str sid "|sub")
+                       :rel/from [:entity/id sid] :rel/kind :sub
+                       :rel/to   [:entity/id (structure-id sub)]})
         law-bits
         (map-indexed
          (fn [i law]
@@ -247,6 +263,7 @@
                                  (map :node law-bits)))
      :rels  (vec (concat (mapcat (comp :rels :emitted) slot-bits)
                          (map :rel slot-bits)
+                         (when genus-rel [genus-rel])
                          (map :rel law-bits)))}))
 
 (defn- reflect-correspondence

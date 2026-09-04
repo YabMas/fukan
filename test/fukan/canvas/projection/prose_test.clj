@@ -67,3 +67,13 @@
           "the type form is rendered as authored")
       (testing "and a genuine target LIST still reads as a list"
         (is (str/includes? text "delegates: compile-body, entity"))))))
+
+(deftest a-species-says-what-it-is-a-kind-of
+  (testing "the slots listed under a species are its OWN, so the prose has to say what it inherits
+            from — otherwise a reader takes a species for a sort carrying only what it adds"
+    (let [text (prose/structure-prose
+                '(defstructure Op "A callable unit."
+                   {:note [:? :string]}
+                   (sub Routine)))]
+      (is (str/includes? text "Every Op is a Routine, and carries everything a Routine carries."))
+      (is (str/includes? text "note — at most one :string (optional)")))))

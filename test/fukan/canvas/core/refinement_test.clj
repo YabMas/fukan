@@ -172,6 +172,19 @@
                      (sub :fukan.canvas.core.refinement-test/CycA)))
         "refused where the chain is walked — before any seam can read an incoherent registry")))
 
+;; ── reflection ──────────────────────────────────────────────────────────────
+
+(deftest reflection-carries-the-genus
+  (testing "a Structure records the genus its declaration NAMED, as an edge to that Structure"
+    (let [d (build/with-grammar (db) nil)]
+      (is (= #{"Routine"}
+             (set (map first
+                       (cq/q '[:find ?n :where
+                               [?s :val/tag ":fukan.canvas.core.refinement-test/Op"]
+                               [?r :rel/from ?s] [?r :rel/kind :sub] [?r :rel/to ?g]
+                               [?g :entity/name ?n]] d))))
+          "stored as what was named, so no genus has to be inferred from a membership body"))))
+
 (deftest a-genus-must-name-a-sort-that-resolves
   (is (refuses? #"no structure named"
                 '(fukan.canvas.core.structure/defstructure NoSuchGenus "d" {} (sub Nowhere)))))

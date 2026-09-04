@@ -39,9 +39,20 @@
   {:focus [{:payload :query} :string]
    :note  [:? {:payload :extra} :string]})
 
-(PLeaf ^{:name "l"} p-leaf)
+(defstructure PGenus
+  "A genus fixture."
+  {:shared [:? :string]})
 
-(defn- reflected [] (build/with-grammar (build/vars->cozo [#'p-leaf]) nil))
+(defstructure PSpecies
+  "A species fixture: one slot of its own, one inherited."
+  {:own [:? :string]}
+  (sub PGenus)
+  (law "no bad own" {:offenders [?x] :where [[?x :val/own "bad"]]}))
+
+(PLeaf ^{:name "l"} p-leaf)
+(PSpecies ^{:name "s"} p-species {:own "o" :shared "sh"})
+
+(defn- reflected [] (build/with-grammar (build/vars->cozo [#'p-leaf #'p-species]) nil))
 
 (defn- struct-node [db tag-str]
   (ffirst (cq/q '[:find ?s :in $ ?t
@@ -68,6 +79,18 @@
         "the rendered form IS the authored form (raw laws unquoted — the parsed
          form; combinator laws render their authored combinator back)")))
 
+(deftest a-species-round-trips-as-what-was-authored
+  (let [db (reflected)
+        f  (g/structure-form db (struct-node db ":fukan.canvas.projection.grammar-test/PSpecies"))]
+    (is (= '(defstructure PSpecies
+              "A species fixture: one slot of its own, one inherited."
+              {:own [:? :string]}
+              (sub PGenus)
+              (law "no bad own" {:offenders [?x] :where [[?x :val/own "bad"]]}))
+           f)
+        "its OWN slot and the genus it named — not :shared, which it inherits and which would
+         make the render a form nobody wrote")))
+
 (deftest payload-options-round-trip
   (let [db (reflected)
         f  (g/structure-form db (struct-node db ":fukan.canvas.projection.grammar-test/PCarry"))]
@@ -88,7 +111,7 @@
   (let [db (reflected)
         p  (g/vocabulary-primer db "fukan.canvas.projection.grammar-test" nil)]
     (testing "header + every structure"
-      (is (str/includes? p "fukan.canvas.projection.grammar-test — 4 structures"))
+      (is (str/includes? p "fukan.canvas.projection.grammar-test — 6 structures"))
       (is (str/includes? p "(defstructure PLeaf"))
       (is (str/includes? p "(defstructure ^:value PVal")))
     (testing "slots aligned in one map, refined scalars as their forms"

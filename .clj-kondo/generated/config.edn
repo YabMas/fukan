@@ -114,8 +114,10 @@
    fukan.canvas.projection.design-test/DPart hooks.fukan.structure/instance
    fukan.canvas.projection.design-test/DStratum hooks.fukan.structure/instance
    fukan.canvas.projection.grammar-test/PCarry hooks.fukan.structure/instance
+   fukan.canvas.projection.grammar-test/PGenus hooks.fukan.structure/instance
    fukan.canvas.projection.grammar-test/PLeaf hooks.fukan.structure/instance
    fukan.canvas.projection.grammar-test/PNode hooks.fukan.structure/instance
+   fukan.canvas.projection.grammar-test/PSpecies hooks.fukan.structure/instance
    fukan.canvas.projection.grammar-test/PVal hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/INode hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/ITarget hooks.fukan.structure/instance

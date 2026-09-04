@@ -65,6 +65,11 @@
        (map #(let [t (str/trim %)] (if (str/blank? t) "" (str indent t))))
        (str/join "\n")))
 
+(defn- an
+  "\"a\" or \"an\" for `w`. Sort names are written by hand and read as English, so the vowel test
+   is the whole rule — the prose dual is read by people, and \"a Operation\" reads as a defect."
+  [w] (if (#{\a \e \i \o \u \A \E \I \O \U} (first (str w))) "an" "a"))
+
 (defn ^{:malli/schema [:=> [:cat :any] :string]}
   structure-prose
   "One `defstructure` data form as prose: what the concept is, what every instance of it
@@ -76,9 +81,14 @@
   (let [[_ nm & more]  form
         [doc more]     (if (string? (first more)) [(first more) (rest more)] [nil more])
         slots          (first (filter map? more))
+        genus          (second (first (filter #(and (seq? %) (= 'sub (first %))) more)))
         laws           (filter #(and (seq? %) (= 'law (first %))) more)]
     (str "### " nm "\n"
          (when doc (str "\n" (doc-lines doc "") "\n"))
+         ;; the slots below are the species' OWN, so without this line a reader would take a
+         ;; species for a sort that carries only what it adds.
+         (when genus (str "\nEvery " nm " is " (an genus) " " genus ", and carries everything "
+                          (an genus) " " genus " carries.\n"))
          (when (seq slots)
            (str "\nEvery " nm " carries:\n"
                 (str/join "\n" (for [[k t] slots]

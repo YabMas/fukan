@@ -115,12 +115,22 @@
                          :scope (some-> (:val/scope e) edn/read-string)}
                         (payload-form (:val/form e))))))))
 
+(defn- genus-of
+  "The NAME of the genus `s` names, as the symbol a declaration would write — the genus is a
+   declared position, so the render is derived from the graph alone and infers nothing."
+  [db s]
+  (some-> (ffirst (cq/q '[:find ?n :in $ ?s
+                          :where [?r :rel/from ?s] [?r :rel/kind :sub] [?r :rel/to ?g]
+                                 [?g :entity/name ?n]] db s))
+          symbol))
+
 (defn- parts [db s]
   (let [e (cq/entity db s)]
     {:name     (symbol (:entity/name e))
      :doc      (:entity/doc e)
      :value?   (boolean (:val/value e))
      :realizes (when (:val/realizes e) (payload-form (:val/form e)))
+     :sub      (genus-of db s)
      :slots    (slots-of db s)
      :laws     (laws-of db s)}))
 
@@ -139,13 +149,16 @@
   structure-form
   "The reified Structure at `eid` rendered back as its `defstructure` data form —
    the print-dual of the authoring surface. Laws carry their datalog unquoted
-   (this is the PARSED form); `^:value` rides the name symbol's metadata. External correspondence
+   (this is the PARSED form); `^:value` rides the name symbol's metadata; a species renders its
+   OWN slots and the genus it named, never the slots it inherits — the form it renders back is
+   the form somebody wrote. External correspondence
    deliberately does not appear inside this form; use `correspondence-form` for its valid top-level dual."
   [db eid]
-  (let [{:keys [name doc value? slots realizes laws]} (parts db eid)]
+  (let [{:keys [name doc value? slots realizes sub laws]} (parts db eid)]
     (concat ['defstructure (if value? (with-meta name {:value true}) name)]
             (when doc [doc])
             (when (seq slots) [(apply array-map (mapcat identity slots))])
+            (when sub [(list 'sub sub)])
             (when realizes [(list 'realized-as realizes)])
             (map law-form laws))))
 
@@ -187,11 +200,12 @@
    the page. Law bodies stay elided either way: the description states the rule, and the datalog
    under it is the mechanism."
   [db s full?]
-  (let [{:keys [name doc value? slots realizes laws]} (parts db s)]
+  (let [{:keys [name doc value? slots realizes sub laws]} (parts db s)]
     (->> (concat
           [(str "(defstructure " (when value? "^:value ") name)]
           (when doc [(str "  " (if full? (inst/doc-text doc) (pr-str (first-line doc))))])
           (when (seq slots) [(fmt-slots slots)])
+          (when sub [(str "  (sub " sub ")")])
           (when realizes [(str "  (realized-as " (pr-str realizes) ")")])
           (map #(str "  (law " (pr-str (:desc %)) " …)") laws))
          (str/join "\n")
