@@ -1278,7 +1278,60 @@
 ;; `vocab-rules`→`terms-of` (the term side). `fukan.canvas.core.rules` now holds only the fixed
 ;; substrate rules `terms-of` composes in; the declarations-golden test freezes this emission.
 
-(defn- rule-sym [kw] (symbol (name kw)))
+(defn- rule-sym
+  "A tag → its SHORT rule symbol — the deliberate cross-namespace union. `(Module ?m)` reads any
+   co-loaded Module; `sort-rule-sym` below is the precise dual that pins one."
+  [kw] (symbol (name kw)))
+
+(defn ^{:malli/schema [:=> [:cat :any] :string]}
+  rule-name
+  "A datalog rule head/call symbol → its identifier spelling: every non-alphanumeric character
+   folded to `_`, over the WHOLE symbol — `module-depends` → `module_depends`,
+   `fukan.common.vocab.code.operation/Operation` → `fukan_common_vocab_code_operation_Operation`.
+
+   The fold lives with the algebra that mints the names rather than with the engine that prefixes
+   them, because it is not injective — `Foo-Bar` and `Foo.Bar` land on one name — and the registry
+   has to refuse a collision over the SAME fold the engine will apply
+   (`validate-distinct-rule-names!`). Two folds could disagree, and the one that lost would union
+   two sorts' bodies under a name that promises precision."
+  [sym]
+  (str/replace (str sym) #"[^A-Za-z0-9]" "_"))
+
+(defn- stored-membership?
+  "True when `sdef`'s instances carry its tag themselves (a `:structure/of` triple), as against a
+   sort whose members are DERIVED by a rule. Only a stored-membership sort has instances of its
+   own, so only it can be pinned by a triple, interned as a constructor, or own a generated law."
+  [sdef]
+  (not (or (:realized-as sdef) (:relation-coproduct sdef) (:derived-rule sdef))))
+
+(defn- sort-rule-sym
+  "The NS-PRECISE kind-rule symbol for sort `tag` — the qualified tag spelled as one symbol, so it
+   folds (`rule-name`) to an identifier no other namespace's same-named sort can answer to.
+   The short-name rule stands beside it and keeps meaning the union it always meant."
+  [tag]
+  (when-not (namespace tag)
+    (throw (ex-info (str "sort-rule-sym: " tag " is not a sort tag (a sort's tag is qualified by its"
+                         " defining namespace; a relation element's rule name is global)")
+                    {:tag tag})))
+  (symbol (namespace tag) (name tag)))
+
+(defn ^{:malli/schema [:=> [:cat :keyword :any] :any]}
+  pin-clause
+  "The datalog clause binding `v` to the instances of sort `tag` — the ONE answer to how a sort is
+   pinned, which the query compiler's `(is …)` lowering and the law engine's scope clause ASK
+   rather than each rebuilding the branch from the sdef.
+
+   A stored-membership sort pins by TRIPLE: its instances carry the tag, so the triple is both
+   precise and cheaper than a rule. A sort whose membership is derived carries no tag to match, so
+   it pins by its NS-PRECISE kind-rule call — never by the short-name rule, which unions across
+   namespaces and would answer with another namespace's same-named sort."
+  [tag v]
+  (let [sdef (structure-by-tag tag)]
+    (when-not sdef
+      (throw (ex-info (str "pin-clause: no structure registered for " tag) {:tag tag})))
+    (if (stored-membership? sdef)
+      [v :structure/of tag]
+      (list (sort-rule-sym tag) v))))
 
 (defn- closure-rules
   "The transitive-closure rules for a relation NAME `rname` — `(R+ a b) ⇐ (R a b) ∪ (R a m)(R+ m b)`."
@@ -1388,8 +1441,13 @@
                   (:sup :eq) (mapv #(into [(list r '?a '?b)] %) (incl-rule-bodies tag expr)))
          :laws []})
 
+      ;; both spellings of one membership: the short-name rule (the cross-namespace union) and the
+      ;; ns-precise rule `pin-clause` asks by. A STORED sort needs no precise rule — its triple
+      ;; already pins it exactly — so only derived membership emits the pair.
       :realized-as
-      {:terms [(into [(list (rule-sym tag) '?e)] body)] :laws []}
+      {:terms [(into [(list (rule-sym tag) '?e)] body)
+               (into [(list (sort-rule-sym tag) '?e)] body)]
+       :laws []}
 
       :defrelation
       (let [head (apply list (rule-sym tag) (:head rule))]
@@ -1454,6 +1512,30 @@
                       {:relation head :defined-by closed-owner :contribution contribution})))
     structures))
 
+(defn- validate-distinct-rule-names!
+  "Reject two sorts whose ns-precise kind rules fold (`rule-name`) to one identifier. Returns
+   `structures` for threading.
+
+   The fold maps every non-alphanumeric character to `_`, so `my.ns/Foo-Bar` and `my.ns/Foo.Bar`
+   land on one name — and the query compiler indexes rules BY that name, merging same-named rules
+   by unioning their bodies. Two sorts would then answer for each other under the very name that
+   promises precision: the cross-namespace union the precise name exists to abolish, reappearing
+   where nothing declares it. The registry as it stands has no collision, which makes this latent
+   rather than live, and latent is the kind that surfaces as a wrong answer instead of an error.
+
+   Unlike refinement acyclicity, this is invisible from either colliding declaration — only
+   something holding all of them can see it — which is why it is here and not at parse time."
+  [structures]
+  (doseq [[nm sdefs] (->> structures
+                          (filter #(namespace (:tag %)))
+                          (group-by #(rule-name (sort-rule-sym (:tag %)))))
+          :when (> (count sdefs) 1)]
+    (throw (ex-info (str "sorts " (str/join " and " (sort (map #(str (:tag %)) sdefs)))
+                         " fold to one rule name (" nm ") — their ns-precise kind rules would union"
+                         " into each other. Rename one of them.")
+                    {:rule-name nm :tags (mapv :tag sdefs)})))
+  structures)
+
 (defn ^:export terms-of
   "All derived Terms over `structures` via closed declaration lowering + every binary relation's
    closure rules (`binary-rule-names`) + the fixed substrate rules (`rules/substrate-rules`) —
@@ -1472,7 +1554,9 @@
    handed), so a subset call — the declarations golden's `self-model-structures` — stays stable
    regardless of which fixtures polluted the global registry."
   [structures]
-  (let [structures (validate-closed-relation-heads! (vec structures))
+  (let [structures (-> (vec structures)
+                       validate-closed-relation-heads!
+                       validate-distinct-rule-names!)
         in-scope   (into #{} (map :tag) structures)]
     (vec (distinct (concat (mapcat (fn [sdef]
                                      (mapcat #(:terms (lower-declaration % sdef)) (sdef->declarations sdef)))
@@ -1501,10 +1585,7 @@
    realized/coproduct/derived concepts (no instances). For these direct tags two same-short-named
    structures from different namespaces never cross-scope."
   [structures]
-  (into #{}
-        (comp (remove #(or (:realized-as %) (:relation-coproduct %) (:derived-rule %)))
-              (map :tag))
-        structures))
+  (into #{} (comp (filter stored-membership?) (map :tag)) structures))
 
 (defn ^{:malli/schema [:=> [:cat] [:vector :Rule]]}
   vocab-rules

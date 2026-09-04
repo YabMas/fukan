@@ -79,6 +79,51 @@
                                    db (s/vocab-rules)))))
           "the short kind rule stays the deliberate co-load union — both Kinds"))))
 
+;; ── derived sorts: the pin where there is no triple to pin with ──────────────
+;; A derived sort's members carry no tag of its own, so pinning it can only go through its kind
+;; RULE. Registered as sdef maps rather than authored: a defstructure takes its tag from `*ns*`,
+;; and what is under test is precisely two namespaces.
+
+(defstructure Marked
+  "Fixture: the nodes a derived sort selects over."
+  {:side :string})
+
+(Marked ^{:name "a"} marked-a {:side "alpha"})
+(Marked ^{:name "b"} marked-b {:side "beta"})
+
+(defn- derived-tagged
+  "A derived sort `Tagged` declared in `ns-nm`, whose members are the Marked nodes on `side`."
+  [ns-nm side]
+  {:tag (keyword ns-nm "Tagged") :ns ns-nm :slots [] :laws []
+   :doc (str "Fixture: " ns-nm "'s Tagged.")
+   :realized-as [['?e :structure/of ::Marked] ['?e :val/side side]]})
+
+(deftest is-pins-a-derived-sort-ns-precisely
+  (testing "(is ?e Tagged) answers ONE namespace's Tagged where the short-name rule answers both"
+    (s/register-structure! (derived-tagged "probe.alpha" "alpha"))
+    (s/register-structure! (derived-tagged "probe.beta"  "beta"))
+    (let [db    (build/vars->cozo [#'marked-a #'marked-b])
+          names (fn [q] (set (map first (cq/q q db))))]
+      ;; the defect this closes: both pins rode a rule head named for the SHORT name, so the
+      ;; compiler's index merged the two declarations' bodies and each Tagged answered with the
+      ;; other's members too — #{"a" "b"} from both of the next two queries.
+      (is (= #{"a"} (names '[:find ?n :where (is ?e :probe.alpha/Tagged) [?e :entity/name ?n]]))
+          "alpha's Tagged holds the alpha-side node alone")
+      (is (= #{"b"} (names '[:find ?n :where (is ?e :probe.beta/Tagged) [?e :entity/name ?n]]))
+          "and beta's the beta-side node alone")
+      (is (= #{"a" "b"} (names '[:find ?n :where (Tagged ?e) [?e :entity/name ?n]]))
+          "while the SHORT name keeps unioning them, which is what it is for"))))
+
+(deftest colliding-precise-rule-names-are-refused
+  (testing "two sorts whose precise rule names fold together are refused, not silently unioned"
+    ;; `-` and `.` both fold to `_`, so these two would share one rule head — the very
+    ;; cross-namespace union the precise name exists to abolish, under a name promising precision.
+    (let [sdef (fn [nm] {:tag (keyword "probe.fold" nm) :ns "probe.fold" :doc "d" :slots [] :laws []})]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"fold to one rule name"
+                            (s/terms-of [(sdef "Foo-Bar") (sdef "Foo.Bar")])))
+      (is (some? (s/terms-of [(sdef "Foo-Bar") (sdef "FooBar")]))
+          "distinct folds are fine — the check refuses collisions, not punctuation"))))
+
 (deftest relation-name-collisions-are-loud
   (testing "a relation element's UNQUALIFIED tag is global presentation identity: re-declaring the same
             relation from a DIFFERENT namespace throws at registration (the registry keys by tag,

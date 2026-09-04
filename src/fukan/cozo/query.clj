@@ -45,10 +45,16 @@
   [t] (if (dvar? t) (cvar t) (clit t)))
 (defn- attr "​:rel/from → rel/from" [kw] (subs (str kw) 1))
 (defn- rname
-  "A datalog rule head/call symbol → a CozoScript rule name: `r_`-prefixed, every
-   non-alphanumeric char folded to `_` (module-depends → r_module_depends, Operation → r_Operation)."
+  "A datalog rule head/call symbol → a CozoScript rule name: `r_`-prefixed over the algebra's
+   identifier fold (`structure/rule-name`), which covers the WHOLE symbol — `module-depends` →
+   `r_module_depends`, `fukan.common.vocab.code.operation/Operation` →
+   `r_fukan_common_vocab_code_operation_Operation`. Cozo accepts a name that long.
+
+   The fold is the algebra's and not this compiler's so that the registry can refuse a sort-name
+   collision over the same one; folding only `(name sym)` here is what dropped the namespace and
+   made a derived sort's kind rule answer across namespaces."
   [sym]
-  (str "r_" (str/replace (name sym) #"[^A-Za-z0-9]" "_")))
+  (str "r_" (structure/rule-name sym)))
 
 
 ;; ── storage buckets: which typed relation holds an attribute's datoms ─────────
@@ -315,9 +321,9 @@
     (throw (ex-info (str "(measure …) is not supported inside not-join/or-join — lift it to the top level: "
                          (pr-str c)) {:clause c}))
     ;; (is ?v <qualified-tag>) — the ns-precise sort pin. Declaration forms resolve the sort
-    ;; SYMBOL to its tag at parse (structure/resolve-sorts); here the resolved tag LOWERS: a
-    ;; direct tag → the `:structure/of` triple; a realized/facet concept (no direct instances)
-    ;; → its kind-rule call. Recursion through not/not-join/or-join bodies comes free.
+    ;; SYMBOL to its tag at parse (structure/resolve-sorts); here the resolved tag LOWERS
+    ;; through the algebra, which owns how a sort is pinned (`structure/pin-clause`). Recursion
+    ;; through not/not-join/or-join bodies comes free.
     (and (seq? c) (= 'is (first c)))
     (let [[_ v tag] c]
       (when-not (and (= 3 (count c)) (keyword? tag))
@@ -330,10 +336,7 @@
         (when (:relation-element sdef)
           (throw (ex-info (str "(is …): " tag " is a relation element, not a sort: " (pr-str c))
                           {:clause c :tag tag})))
-        (compile-clause
-         (if (contains? (structure/direct-scope-tags [sdef]) tag)
-           [v :structure/of tag]
-           (list (symbol (name tag)) v)))))
+        (compile-clause (structure/pin-clause tag v))))
     (and (seq? c) (symbol? (first c)))
     (let [nm (rname (first c))]
       [(str nm "[" (str/join ", " (map cterm (rest c))) "]") nil #{nm}])

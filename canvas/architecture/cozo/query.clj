@@ -28,7 +28,8 @@
      :delegates [kstructure/vocab-rules]})
   (Operation compile-body "Compile where-clauses + caller rules + outer-scope vars (find vars / law offenders — they count toward inline-measure grouping inference) → [rule-lines body-str], emitting the reachable vocab rules. A PURE compiler (content-named helpers, threaded wildcard counter, lifted-measure aux rules)."
     {:signature [:=> [:catn [:where :any] [:rules :any] [:index :any] [:outer-vars :any]] :any]
-     :performs  [:throws]})
+     :performs  [:throws]
+     :delegates [kstructure/pin-clause kstructure/rule-name]})
   (Operation buckets-of "The db's attr→bucket index (which typed relation holds each attribute), memoized on the db handle — what lets a clause compile to ONE stored relation instead of a view."
     {:signature [:=> [:catn [:cdb db/CozoDb]] :any]
      :performs  [:state]

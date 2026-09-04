@@ -52,6 +52,18 @@
    evaluate the identical laws."
   {:signature [:=> [:catn [:sdef :any]] :any]
    :performs  [:throws :state]})
+(Operation pin-clause
+  "The datalog clause binding a var to the instances of a sort — the ONE answer to how a sort is
+   pinned, which the query compiler's (is …) lowering and the law engine's scope clause ask rather
+   than each rebuilding it. A stored-membership sort pins by triple, a derived one by its
+   ns-precise kind rule."
+  {:signature [:=> [:catn [:tag :keyword] [:v :any]] :any]
+   :performs  [:throws :state]})                  ; reads the registry; rejects an unregistered tag
+(Operation rule-name
+  "A datalog rule head/call symbol → its identifier spelling, folding the WHOLE symbol. Owned with
+   the algebra that mints the names, so the registry refuses a sort-name collision over the same
+   fold the query compiler applies."
+  {:signature [:=> [:catn [:sym :any]] :string]})
 (Operation direct-scope-tags
   "Qualified tags whose instances carry :structure/of DIRECTLY, so a scoped law can pin ns-precisely
    instead of riding the short-name rule. Excludes facets + realized/coproduct/derived concepts."
@@ -61,6 +73,6 @@
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
   {:child [vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
            all-corresponds correspond-by-pair
-           laws-of direct-scope-tags
+           laws-of direct-scope-tags pin-clause rule-name
            Violation Form                         ; check-output SHAPE (cozo-law produces it) + the print-dual code-form (projections produce it)
            Rule]})                                ; the rules-output type
