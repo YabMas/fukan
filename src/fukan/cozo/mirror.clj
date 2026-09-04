@@ -8,7 +8,12 @@
      t_bool {e: Int, a: String, v: Bool}
    The attribute keyword is stored as a plain string with no leading colon
    (`:rel/from` → \"rel/from\"), matching how the CozoScript reads it. (Named `mirror` from when
-   it reflected a datascript db; now simply the substrate's only write path.)"
+   it reflected a datascript db; now simply the substrate's only write path.)
+
+   Each relation also carries a secondary `(a, v)` index, and the primary key is why: keying on
+   the whole triple orders a relation by `e`, so the one access pattern the query compiler emits
+   most — bind an attribute and a value, leave the entity free — is the one the key cannot serve.
+   See `load-datoms`."
   (:require [fukan.cozo.db :as db]))
 
 (defn- attr->str
@@ -64,7 +69,14 @@
       (db/q cdb (str ":create " name " {e: Int, a: String, v: " type "}"))
       (when-let [rows (seq (get buckets bucket))]
         (db/q cdb (str "?[e, a, v] <- $rows :put " name " {e, a, v}")
-              {:rows (vec rows)})))
+              {:rows (vec rows)}))
+      ;; The secondary `(a, v)` index. A clause that binds an attribute and a value and leaves
+      ;; the entity free — every sort pin, every relation hop — has no key prefix to seek and
+      ;; scans the whole bucket without it; roughly half of `check` on this project's model is
+      ;; that scanning, and a genus's kind rule pays it once per species. Built after the load
+      ;; so the bulk `:put` is not maintaining it row by row, and built for a bucket that loads
+      ;; empty too, because `insert-datoms` may fill it later.
+      (db/q cdb (str "::index create " name ":av {a, v}")))
     cdb))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb :any] :CozoDb]}
