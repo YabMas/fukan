@@ -92,22 +92,23 @@
                         (take-while some? (iterate #(.getCause %) e)))))))
 
 (deftest realized-concept-rejects-extra-clauses
-  (testing "(realized-as …) may not be combined with slots/laws/reader/^:value"
+  (testing "(realized-as …) may not be combined with slots/reader/^:value"
     (is (throws-realized-msg?
           '(fukan.canvas.core.structure/defstructure BadRealized "d"
              (realized-as [(Note ?e)])
              {:x :boolean}))
-        "realized-as + slot is rejected")
-    (is (throws-realized-msg?
-          '(fukan.canvas.core.structure/defstructure BadRealized2 "d"
-             (realized-as [(Note ?e)])
-             (law "nope" {:offenders [?e] :where [[?e :x 1]]})))
-        "realized-as + law is rejected")
+        "realized-as + slot is rejected — nothing carries a derived sort's tag, so nothing could
+         hold the slot's value")
     (is (throws-realized-msg?
           '(fukan.canvas.core.structure/defstructure BadRealized3 "d"
              (realized-as [(Note ?e)])
              (realized-as [(Note ?e)])))
-        "multiple realized-as is rejected")))
+        "multiple realized-as is rejected"))
+  (testing "a LAW is allowed: it scopes through the membership rule, which is what a derived sort has"
+    (is (false? (throws-realized-msg?
+                  '(fukan.canvas.core.structure/defstructure OkRealizedLaw "d"
+                     (realized-as [(Note ?e)])
+                     (law "fine" {:offenders [?e] :where [[?e :val/n "z"]]})))))))
 
 ;; ── transitive closure fixtures: a delegates chain a → b → c ────────────────
 

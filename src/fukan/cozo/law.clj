@@ -36,6 +36,13 @@
    a sort's instances are. `index` is the `query/vocab-index`."
   [{:keys [offenders where rules] :as law} index]
   (let [st           (scope-tag law)
+        ;; a scope naming no registered sort would pin nothing and let the law pass vacuously.
+        ;; Refusing here makes it :unsupported instead, and `check` fails closed on that — an
+        ;; unevaluated constraint cannot establish satisfaction.
+        _            (when (and st (nil? (structure/structure-by-tag st)))
+                       (throw (ex-info (str "law " (pr-str (:desc law)) " is scoped to " st
+                                            ", which is not a registered sort")
+                                       {:law (:desc law) :scope st})))
         scope-clause (when st (structure/pin-clause st (first offenders)))
         where*       (cond->> where scope-clause (cons scope-clause))
         [rule-lines body] (query/compile-body where* rules index offenders)]

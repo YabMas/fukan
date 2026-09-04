@@ -68,6 +68,88 @@
 (defn ^{:malli/schema [:=> [:cat :keyword] :any]}
   structure-by-tag [tag] (get @structures tag))
 
+(defn- stored-membership?
+  "True when `sdef`'s instances carry its tag themselves (a `:structure/of` triple), as against a
+   sort whose members are DERIVED by a rule. Only a stored-membership sort has instances of its
+   own, so only it can be pinned by a triple, interned as a constructor, or own a generated law."
+  [sdef]
+  (not (or (:realized-as sdef) (:relation-coproduct sdef) (:derived-rule sdef))))
+
+(defn- species-of
+  "Every registered sort that directly names `tag` as its genus."
+  [tag]
+  (into #{} (comp (filter #(= tag (:sub %))) (map :tag)) (vals @structures)))
+
+(defn- genus?
+  "True when some registered sort names `tag` as its genus. A genus cannot be pinned by a triple: a species'
+   instance carries the species' tag and nothing else, so genus membership is answered by a RULE —
+   which is also why a genus emits a precise kind rule and a plain sort does not need one."
+  [tag]
+  (boolean (seq (species-of tag))))
+
+(defn- stored-tags-under
+  "Every tag a member of `tag` may CARRY: `tag` itself when its own membership is stored, plus the
+   same over every sort refining it, transitively. The set a derived refinement is confined to —
+   terminating because a refinement cycle is refused where the chain is walked."
+  [tag]
+  (let [sd (structure-by-tag tag)]
+    (into (if (and sd (stored-membership? sd)) #{tag} #{})
+          (mapcat stored-tags-under)
+          (species-of tag))))
+
+;; ── rule names + how a sort is pinned ────────────────────────────────────────
+;; Where a sort's membership becomes a datalog clause. One fold, one precise rule name, one answer
+;; to what pins a sort — asked by the query compiler, the law engine and the generated target
+;; checks alike, so a query and a law never disagree about what a sort's instances are.
+
+(defn ^{:malli/schema [:=> [:cat :any] :string]}
+  rule-name
+  "A datalog rule head/call symbol → its identifier spelling: every non-alphanumeric character
+   folded to `_`, over the WHOLE symbol — `module-depends` → `module_depends`,
+   `fukan.common.vocab.code.operation/Operation` → `fukan_common_vocab_code_operation_Operation`.
+
+   The fold lives with the algebra that mints the names rather than with the engine that prefixes
+   them, because it is not injective — `Foo-Bar` and `Foo.Bar` land on one name — and the registry
+   has to refuse a collision over the SAME fold the engine will apply
+   (`validate-distinct-rule-names!`). Two folds could disagree, and the one that lost would union
+   two sorts' bodies under a name that promises precision."
+  [sym]
+  (str/replace (str sym) #"[^A-Za-z0-9]" "_"))
+
+(defn- sort-rule-sym
+  "The NS-PRECISE kind-rule symbol for sort `tag` — the qualified tag spelled as one symbol, so it
+   folds (`rule-name`) to an identifier no other namespace's same-named sort can answer to.
+   The short-name rule stands beside it and keeps meaning the union it always meant."
+  [tag]
+  (when-not (namespace tag)
+    (throw (ex-info (str "sort-rule-sym: " tag " is not a sort tag (a sort's tag is qualified by its"
+                         " defining namespace; a relation element's rule name is global)")
+                    {:tag tag})))
+  (symbol (namespace tag) (name tag)))
+
+(defn ^{:malli/schema [:=> [:cat :keyword :any] :any]}
+  pin-clause
+  "The datalog clause binding `v` to the instances of sort `tag` — the ONE answer to how a sort is
+   pinned, which the query compiler's `(is …)` lowering and the law engine's scope clause ASK
+   rather than each rebuilding the branch from the sdef.
+
+   A stored-membership sort with no species pins by TRIPLE: every one of its instances carries the
+   tag, so the triple is both precise and cheaper than a rule. A GENUS cannot — a species' instance
+   carries the species' tag and nothing else — and neither can a sort whose membership is derived,
+   so both pin by the NS-PRECISE kind-rule call. Never by the short-name rule, which unions across
+   namespaces and would answer with another namespace's same-named sort.
+
+   TOTAL: a tag nothing is registered under also pins by triple, which is the right answer for it —
+   nothing derives such a tag and no sort names it as a genus, so the nodes carrying it are all there are.
+   Whether the caller should have a registered sort in hand is the CALLER's precondition, checked
+   where there is context to say what went wrong: `(is …)` names the clause, the law engine names
+   the law it would otherwise evaluate vacuously."
+  [tag v]
+  (let [sdef (structure-by-tag tag)]
+    (if (and (or (nil? sdef) (stored-membership? sdef)) (not (genus? tag)))
+      [v :structure/of tag]
+      (list (sort-rule-sym tag) v))))
+
 ;; ── instantiation (the interpreter: instance → Node + reified slot Relations) ─
 
 (defn- slot-for
@@ -822,13 +904,17 @@
 (defn ^:export sdef->declarations
   "Adapt an sdef (built by the unchanged parser) into typed declaration maps for the registry — a
    pure re-expression of the sdef's fields; the parser is untouched. `:kind :kind` is the node-kind
-   membership Term, emitted only for CONCRETE structures (not realized/coproduct/derived concepts).
+   membership Term, emitted only for CONCRETE structures (not realized/coproduct/derived concepts);
+   `:kind :sub` is the genus a species declared, which grows THAT sort's membership rule.
    (Cross-tag correspondence is a separate declaration form — `correspond`, below — lowered on its
    own path through `terms-of`, not merged in here.)"
-  [{:keys [slots laws realized-as relation-element relation-incl derived-rule]}]
+  [{:keys [slots laws realized-as relation-element relation-incl derived-rule sub] :as sdef}]
   (concat
    (when-not (or realized-as relation-element derived-rule) [{:kind :kind}])
-   (for [sl slots] {:kind :slot :slot sl})
+   (when sub [{:kind :sub :genus sub}])
+   ;; only a sort whose instances carry its tag has slots to check: a derived sort's members are
+   ;; other sorts' instances, so a slot law pinned to its tag would pin nothing.
+   (when (stored-membership? sdef) (for [sl slots] {:kind :slot :slot sl}))
    (when realized-as   [{:kind :realized-as :body realized-as}])
    (when relation-incl [{:kind :relation-incl :dir (:incl relation-incl) :expr (:expr relation-incl)}])
    (when derived-rule  [{:kind :defrelation :rule derived-rule}])
@@ -852,6 +938,21 @@
    say `(is ?s MyOwnSort)` before its own registration exists (the self-reference case)."
   nil)
 
+(defn- resolve-sort-symbol
+  "A sort NAME as written in a declaration form → its qualified tag, or nil when nothing here
+   answers to it. Resolution is lexical and rides requires, the same identity an instance
+   reference uses: the sort being defined (`*self-tag*`, the self-reference case), then a var,
+   then a same-ns registered tag — a derived sort interns no var, so only the last route finds one.
+   Shared by `(is ?v Sort)` and `(sub Genus)`, which name a sort the same way."
+  [target]
+  (or (when (and *self-tag* (= (name target) (name *self-tag*))) *self-tag*)
+      (when-let [vr (resolve target)]
+        (let [m (meta vr)
+              t (keyword (str (ns-name (:ns m))) (name (:name m)))]
+          (when (structure-by-tag t) t)))
+      (let [t (keyword (str *ns*) (name target))]
+        (when (structure-by-tag t) t))))
+
 (defn- resolve-is-clause
   "Resolve the sort NAME in one `(is ?v Sort)` clause → `(is ?v <qualified-tag>)`. A symbol
    resolves self-tag first (the defining scope), then by var (requires-based), then by a
@@ -866,14 +967,7 @@
       (cond
         (keyword? target) c
         (symbol? target)
-        (let [via-self (when (and *self-tag* (= (name target) (name *self-tag*))) *self-tag*)
-              via-var  (when-let [vr (resolve target)]
-                         (let [m (meta vr)
-                               t (keyword (str (ns-name (:ns m))) (name (:name m)))]
-                           (when (structure-by-tag t) t)))
-              via-ns   (let [t (keyword (str *ns*) (name target))]
-                         (when (structure-by-tag t) t))
-              tag      (or via-self via-var via-ns)]
+        (let [tag (resolve-sort-symbol target)]
           (when-not tag
             (throw (ex-info (str "(is " v " " target "): no structure named " target " resolves here"
                                  " — require its defining namespace (resolution rides requires, like"
@@ -1025,6 +1119,73 @@
                              (mapv (fn [[h & b]] (into [h] (resolve-sorts (vec b))))))
          :scope     (:scope m)}))))
 
+;; ── refinement: one sort declares it is a kind of another ────────────────────
+;; `(sub Genus)` is a declared POSITION of its own, never read out of a membership body — that
+;; body is an arbitrary clause vector which may name no sort or several, so deriving a genus from
+;; it would be a guess wearing a rule's clothes. Its two halves are independent: the genus a sort
+;; names, and whether that sort's own membership is STORED (a tag on its instances, a constructor
+;; interned) or DERIVED (whatever its rule derives, no constructor).
+
+(defn ^:export ^{:malli/schema [:=> [:cat :any] :any]}
+  authored-slots
+  "The slots a declaration WROTE — its own, without those it inherits by refining a genus. `:slots`
+   carries the EFFECTIVE set (inherited then own), which is what lowering, law generation and
+   instantiation need to be complete; the print-dual needs this one, so that rendering a species
+   yields the declaration somebody wrote rather than that declaration with its genus's slots
+   spliced in — a form that would no longer be the form it renders.
+
+   Falls back to `:slots` for an sdef built by hand (a relation element, a test fixture): it
+   inherits nothing, so the two sets cannot differ."
+  [sdef]
+  (or (:authored-slots sdef) (:slots sdef)))
+
+(defn- inherited-slots
+  "The slots a sort tagged `tag` inherits by refining `genus` — every ancestor's AUTHORED slots,
+   root-most first, so a species is constrained by everything it is.
+
+   It WALKS the chain rather than reading the genus's already-resolved set, because the walk is
+   also what refuses a CYCLE. A chain that closes on itself has no slot set to resolve, and the
+   walk cannot terminate on one; refusing it here means no seam above — neither `terms-of` nor
+   `laws-of`, which a caller reaches independently — can ever read an incoherent registry."
+  [tag genus]
+  (loop [g genus, seen #{tag}, acc ()]
+    (if (nil? g)
+      (vec (apply concat acc))
+      (do
+        (when (seen g)
+          (throw (ex-info (str "refinement cycle: " tag " has genus " g ", which reaches back to it")
+                          {:structure tag :genus g})))
+        (let [sd (or (structure-by-tag g)
+                     (throw (ex-info (str tag " names genus " g ", which is not a registered sort")
+                                     {:structure tag :genus g})))]
+          (recur (:sub sd) (conj seen g) (cons (authored-slots sd) acc)))))))
+
+(defn- declared-genus
+  "The tag named by the single `(sub Genus)` form in `body`, or nil. Throws on a second one or
+   on a name nothing here answers to."
+  [sname body]
+  (let [forms (filter #(and (seq? %) (= 'sub (first %))) body)]
+    (when (> (count forms) 1)
+      (throw (ex-info (str "defstructure " sname ": multiple (sub …) forms — a sort names at "
+                           "most one genus") {:structure sname})))
+    (when-let [[_ target & more] (first forms)]
+      (when (seq more)
+        (throw (ex-info (str "defstructure " sname ": (sub Genus) names one sort: "
+                             (pr-str (first forms))) {:structure sname})))
+      (cond
+        (keyword? target) target
+        (symbol? target)
+        (or (resolve-sort-symbol target)
+            (throw (ex-info (str "defstructure " sname ": (sub " target ") — no structure named "
+                                 target " resolves here. Require its defining namespace (resolution "
+                                 "rides requires, like an instance reference), or name the full tag "
+                                 "keyword.")
+                            {:structure sname :genus target})))
+        :else
+        (throw (ex-info (str "defstructure " sname ": (sub …) takes a sort symbol or a qualified "
+                             "tag keyword: " (pr-str (first forms)))
+                        {:structure sname}))))))
+
 (defmacro defstructure
   "Define a structure: its slots (relations-with-laws) and free laws. Registers the
    structure-definition and defines a VALUE-RETURNING instantiation macro named `sname`.
@@ -1051,8 +1212,17 @@
    Entity instances always require the name symbol. Only `^:value` structures are
    anonymous, content-identified expressions: `(Effect :io)`, `(Schema {:kind …})`.
 
+   `(sub Genus)` declares that this sort is a KIND OF another: it inherits the genus's slots,
+   answers the genus's membership rule, and may add slots and laws of its own. What it may declare
+   follows from its own membership. With the tag stored on its instances (the default) it is an
+   ordinary sort that happens to be a species — authorable, slot-declaring, law-generating. With
+   `(realized-as …)` beside it, its members are whatever its rule derives among the ones the genus
+   already admits, so it declares laws and no slots (a law pinned to a tag nothing carries would
+   pin nothing). Restating a slot the genus declares is refused: that duplication is what
+   refinement removes, and a species could otherwise weaken a constraint its genus states.
+
    Body forms must be the slots map or (law ...) / (reader ...) / (syntax ...) /
-   (realized-as ...); anything else is rejected
+   (realized-as ...) / (sub ...); anything else is rejected
    at macro-expansion time (a silently-dropped form is a footgun). Correspondence is
    declared EXTERNALLY via `(correspond Target …)`, never inside the defstructure.
 
@@ -1061,16 +1231,30 @@
   [sname docstring & body]
   (doseq [form body]
     (when-not (or (map? form)
-                  (and (seq? form) (#{'law 'reader 'syntax 'realized-as} (first form))))
+                  (and (seq? form) (#{'law 'reader 'syntax 'realized-as 'sub} (first form))))
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
-                           " — expected a slots map, (law ...), (reader ...), (syntax ...) or (realized-as ...)")
+                           " — expected a slots map, (law ...), (reader ...), (syntax ...), "
+                           "(realized-as ...) or (sub ...)")
                       {:structure sname :form form}))))
   (when (> (count (filter map? body)) 1)
     (throw (ex-info (str "defstructure " sname ": multiple slots maps — declare all slots in one map")
                     {:structure sname})))
-  (let [value? (boolean (:value (meta sname)))
-        tag    (keyword (str (ns-name *ns*)) (name sname))   ; identity = defining ns + name
-        slots  (mapv (fn [[rel v]] (parse-slot-entry rel v)) (or (first (filter map? body)) {}))
+  (let [value?  (boolean (:value (meta sname)))
+        tag     (keyword (str (ns-name *ns*)) (name sname))   ; identity = defining ns + name
+        sub     (declared-genus sname body)
+        own     (mapv (fn [[rel v]] (parse-slot-entry rel v)) (or (first (filter map? body)) {}))
+        ;; the walk that resolves the inheritance is also the one that refuses a cycle
+        inherited (when sub (inherited-slots tag sub))
+        _       (doseq [sl own]
+                  (when (some #(= (:rel sl) (:rel %)) inherited)
+                    (throw (ex-info
+                            (str "defstructure " sname ": slot " (:rel sl) " is already declared by "
+                                 sub " — restating a genus's slot is exactly the duplication "
+                                 "refinement removes, and a species restating one could silently "
+                                 "weaken a constraint its genus states, which nobody reading the "
+                                 "genus would see")
+                            {:structure sname :slot (:rel sl) :genus sub}))))
+        slots   (into (vec inherited) own)
         _      (doseq [s slots]
                  (when (and (scalar-slot? s) (#{:some :many :set} (:card s)))
                    (throw (ex-info
@@ -1098,17 +1282,22 @@
                           (filter #(= 'syntax (first %)) body))
         realized (some (fn [f] (when (= 'realized-as (first f)) (resolve-sorts (unquote-lit (second f)))))
                        (filter #(= 'realized-as (first %)) body))
+        ;; DERIVED membership means the sort has no instances of its own: nothing carries its tag,
+        ;; so it can hold no slot value and intern no constructor. Laws it may declare — they scope
+        ;; through its membership rule, which is exactly what a derived sort has.
         _      (when realized
-                 (when (or (seq slots) (seq laws) value? reader-form)
+                 (when (or (seq own) value? reader-form)
                    (throw (ex-info (str "defstructure " sname
                                         ": a realized concept (realized-as) is pure derived membership —"
-                                        " it may not also declare slots, laws, a reader, or ^:value")
+                                        " its members are instances of other sorts, so it may not also"
+                                        " declare slots, a reader, or ^:value")
                                    {:structure sname})))
                  (when (> (count (filter #(and (seq? %) (= 'realized-as (first %))) body)) 1)
                    (throw (ex-info (str "defstructure " sname ": multiple (realized-as …) forms")
                                    {:structure sname}))))
-        sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?
-                :realized-as realized}]
+        sdef   (cond-> {:tag tag :doc docstring :slots slots :laws laws :value? value?
+                        :realized-as realized}
+                 sub (assoc :sub sub :authored-slots own))]
     `(do
        (register-structure! (cond-> '~sdef
                               ~reader-form (assoc :reader ~reader-form)
@@ -1222,16 +1411,25 @@
    When `target` is `:Any` (the wildcard), the target-type law is skipped —
    any node is accepted; only cardinality laws are emitted. A UNION slot
    (`:alts`) checks the disjunction: the target must be NONE of the alternatives
-   to offend (a conjunction of `not`s)."
+   to offend (a conjunction of `not`s).
+
+   The TARGET is asked of the algebra (`pin-clause`), so a slot typed to a genus admits a species,
+   whose only stored tag is its own. The OWNER stays a literal triple, and always can: a generated
+   law's owner is the sort that declared the slot, which has a concrete tag by construction —
+   which is what keeps the law engine's scalar type-check hybrid, and it alone pattern-matches
+   that triple back out, working untouched."
   [tag {:keys [rel card target alts]}]
   (let [tn (name tag) rn (name rel)
-        target-law {:desc (str tn "." rn " target must be a "
-                               (if alts (str/join "|" (map name alts)) (name target)))
-                    :offenders '[?x ?t]
-                    :where (into [['?r :rel/from '?x] ['?r :rel/kind rel] ['?r :rel/to '?t]
-                                  ['?x :structure/of tag]]
-                                 (for [a (or alts [target])]
-                                   (list 'not ['?t :structure/of a])))}
+        ;; built only when it is wanted: the wildcard names no sort, so there is nothing to ask
+        ;; the algebra about it.
+        target-law (fn []
+                     {:desc (str tn "." rn " target must be a "
+                                 (if alts (str/join "|" (map name alts)) (name target)))
+                      :offenders '[?x ?t]
+                      :where (into [['?r :rel/from '?x] ['?r :rel/kind rel] ['?r :rel/to '?t]
+                                    ['?x :structure/of tag]]
+                                   (for [a (or alts [target])]
+                                     (list 'not (pin-clause a '?t))))})
         none-law (fn [verb]
                    {:desc (str tn "." rn " " verb " (found none)")
                     :offenders '[?x]
@@ -1245,7 +1443,7 @@
                                ['?r1 :rel/from '?x] ['?r1 :rel/kind rel]
                                ['?r2 :rel/from '?x] ['?r2 :rel/kind rel]
                                [(list 'not= '?r1 '?r2)]]})]
-    (cond-> (if (= target :Any) [] [target-law])
+    (cond-> (if (= target :Any) [] [(target-law)])
       (= card :one)      (conj (none-law "requires exactly one")
                                (several-law "requires exactly one"))
       (= card :some)     (conj (none-law "requires at least one"))
@@ -1280,58 +1478,28 @@
 
 (defn- rule-sym
   "A tag → its SHORT rule symbol — the deliberate cross-namespace union. `(Module ?m)` reads any
-   co-loaded Module; `sort-rule-sym` below is the precise dual that pins one."
+   co-loaded Module; `sort-rule-sym` is the precise dual that pins one."
   [kw] (symbol (name kw)))
 
-(defn ^{:malli/schema [:=> [:cat :any] :string]}
-  rule-name
-  "A datalog rule head/call symbol → its identifier spelling: every non-alphanumeric character
-   folded to `_`, over the WHOLE symbol — `module-depends` → `module_depends`,
-   `fukan.common.vocab.code.operation/Operation` → `fukan_common_vocab_code_operation_Operation`.
+(defn- admissible-clause
+  "The clause confining `v` to the nodes genus `tag` already admits — one `:structure/of` triple per
+   stored tag under it, disjoined. Nil when nothing under the genus stores a tag: there is then no
+   slot any member could be missing, so nothing to confine.
 
-   The fold lives with the algebra that mints the names rather than with the engine that prefixes
-   them, because it is not injective — `Foo-Bar` and `Foo.Bar` land on one name — and the registry
-   has to refuse a collision over the SAME fold the engine will apply
-   (`validate-distinct-rule-names!`). Two folds could disagree, and the one that lost would union
-   two sorts' bodies under a name that promises precision."
-  [sym]
-  (str/replace (str sym) #"[^A-Za-z0-9]" "_"))
-
-(defn- stored-membership?
-  "True when `sdef`'s instances carry its tag themselves (a `:structure/of` triple), as against a
-   sort whose members are DERIVED by a rule. Only a stored-membership sort has instances of its
-   own, so only it can be pinned by a triple, interned as a constructor, or own a generated law."
-  [sdef]
-  (not (or (:realized-as sdef) (:relation-coproduct sdef) (:derived-rule sdef))))
-
-(defn- sort-rule-sym
-  "The NS-PRECISE kind-rule symbol for sort `tag` — the qualified tag spelled as one symbol, so it
-   folds (`rule-name`) to an identifier no other namespace's same-named sort can answer to.
-   The short-name rule stands beside it and keeps meaning the union it always meant."
-  [tag]
-  (when-not (namespace tag)
-    (throw (ex-info (str "sort-rule-sym: " tag " is not a sort tag (a sort's tag is qualified by its"
-                         " defining namespace; a relation element's rule name is global)")
-                    {:tag tag})))
-  (symbol (namespace tag) (name tag)))
-
-(defn ^{:malli/schema [:=> [:cat :keyword :any] :any]}
-  pin-clause
-  "The datalog clause binding `v` to the instances of sort `tag` — the ONE answer to how a sort is
-   pinned, which the query compiler's `(is …)` lowering and the law engine's scope clause ASK
-   rather than each rebuilding the branch from the sdef.
-
-   A stored-membership sort pins by TRIPLE: its instances carry the tag, so the triple is both
-   precise and cheaper than a rule. A sort whose membership is derived carries no tag to match, so
-   it pins by its NS-PRECISE kind-rule call — never by the short-name rule, which unions across
-   namespaces and would answer with another namespace's same-named sort."
+   A derived refinement's body is arbitrary datalog, so left alone it could derive instances of
+   sorts that do not refine the genus at all — making them members of the genus, seen by
+   genus-scoped laws and admitted by genus-typed slots, while carrying none of the genus's slots.
+   Conjoining this closes that hole in MEMBERSHIP rather than by a law: an excluded candidate is
+   simply not a member, so no invalid member exists to report. It cannot ask the genus's own kind
+   rule instead — that rule already contains this very body, so the test would hold of every
+   derived member by construction and pass exactly when it should fail. Triples over the substrate
+   carry no such circularity: a triple cannot be satisfied by a rule body."
   [tag v]
-  (let [sdef (structure-by-tag tag)]
-    (when-not sdef
-      (throw (ex-info (str "pin-clause: no structure registered for " tag) {:tag tag})))
-    (if (stored-membership? sdef)
-      [v :structure/of tag]
-      (list (sort-rule-sym tag) v))))
+  (let [tags (sort (stored-tags-under tag))]
+    (case (count tags)
+      0 nil
+      1 [v :structure/of (first tags)]
+      (apply list 'or-join [v] (for [t tags] [v :structure/of t])))))
 
 (defn- closure-rules
   "The transitive-closure rules for a relation NAME `rname` — `(R+ a b) ⇐ (R a b) ∪ (R a m)(R+ m b)`."
@@ -1425,7 +1593,24 @@
   (let [tag (:tag sdef)]
     (case kind
       :kind
-      {:terms [[(list (rule-sym tag) '?e) ['?e :structure/of tag]]] :laws []}
+      ;; the short-name rule always; the ns-precise one only for a GENUS, which is the only stored
+      ;; sort whose membership `pin-clause` answers by rule rather than by triple.
+      {:terms (cond-> [[(list (rule-sym tag) '?e) ['?e :structure/of tag]]]
+                (genus? tag) (conj [(list (sort-rule-sym tag) '?e) ['?e :structure/of tag]]))
+       :laws []}
+
+      ;; The species grows the genus's rule; the genus's own declaration never changes. This is the
+      ;; unary analogue of a `:sub` relation inclusion, which already emits — from the
+      ;; CONTRIBUTOR's own clause — a rule whose head names another declaration's relation. It is
+      ;; safe for the same reason: a sort's kind rule is not a relation head, so the closed-head
+      ;; check has nothing here to close and no genus can be closed against its own species.
+      ;; Both of the genus's spellings gain a body, and each reads the species by asking the
+      ;; algebra — a triple for a stored species, its precise rule for a derived one.
+      :sub
+      (let [g (:genus declaration)]
+        {:terms [[(list (rule-sym g) '?e) (pin-clause tag '?e)]
+                 [(list (sort-rule-sym g) '?e) (pin-clause tag '?e)]]
+         :laws []})
 
       :slot
       (if (scalar-slot? slot)
@@ -1442,12 +1627,15 @@
          :laws []})
 
       ;; both spellings of one membership: the short-name rule (the cross-namespace union) and the
-      ;; ns-precise rule `pin-clause` asks by. A STORED sort needs no precise rule — its triple
-      ;; already pins it exactly — so only derived membership emits the pair.
+      ;; ns-precise rule `pin-clause` asks by. A stored sort needs no precise rule unless it is a
+      ;; genus — its triple already pins it exactly — so derived membership always emits the pair.
       :realized-as
-      {:terms [(into [(list (rule-sym tag) '?e)] body)
-               (into [(list (sort-rule-sym tag) '?e)] body)]
-       :laws []}
+      (let [body (filterv some?
+                          (cond-> (vec body)
+                            (:sub sdef) (conj (admissible-clause (:sub sdef) '?e))))]
+        {:terms [(into [(list (rule-sym tag) '?e)] body)
+                 (into [(list (sort-rule-sym tag) '?e)] body)]
+         :laws []})
 
       :defrelation
       (let [head (apply list (rule-sym tag) (:head rule))]

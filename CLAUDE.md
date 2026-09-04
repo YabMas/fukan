@@ -349,6 +349,18 @@ A `defstructure` is a composition of **slots** plus **laws**:
   defstructure's laws sit and route by target-type into the container's slots.
 - `^:value` structures are content-deduped, inline-anonymous nodes (structurally
   equal values collapse to one node) — used for nameless compound data.
+- `(sub Genus)` declares that a sort is a KIND OF another — it inherits the genus's slots,
+  answers the genus's membership rule, and may add slots and laws of its own, so a shared property
+  is declared once on the genus and restated by no species. Membership is answered by RULE, not by
+  identity: a species' instance carries exactly ONE stored tag, its own, and the genus's kind rule
+  gains one body per species. What a species may declare follows from its own membership — with the
+  tag stored on its instances (the default) it is an ordinary sort that happens to be a species,
+  authorable and law-generating; with `(realized-as …)` beside it its members are whatever its rule
+  derives AMONG THE ONES THE GENUS ALREADY ADMITS (the body is conjoined with the genus's stored
+  tags, so a derived species cannot conjure members the genus would not otherwise hold), and it
+  declares laws and no slots. Restating a genus's slot is refused, as is a chain that closes on
+  itself. ⚠ Scoping by rule costs one scan of the string bucket PER SPECIES until `t_str` carries an
+  `(a, v)` index — correctness is unaffected, latency is linear in the species count.
 - `(law "desc" {:offenders [?x] :where […] :rules […]? :scope …? :key …?})` is a datalog
   constraint — ONE unquoted map, the same declaration cell as everything else (datalog in a
   declaration form is data by position, never quoted; quotes belong to evaluated contexts —
@@ -363,9 +375,11 @@ A `defstructure` is a composition of **slots** plus **laws**:
   call: the sort symbol resolves at DECLARATION time through the declaring ns (requires-based,
   like an instance reference; a law may name the structure being defined; `::Sort` for a
   same-ns forward reference; the full tag keyword where a require would cycle — resolution
-  rides the acyclic ns graph), and the query compiler LOWERS the resolved tag — a
-  `:structure/of` triple for a direct tag, the kind-rule call for a realized concept. The bare
-  rule call `(Sort ?x)` stays the deliberate CO-LOAD UNION (any same-short-named sort). Never
+  rides the acyclic ns graph), and the DECLARATION ALGEBRA lowers the resolved tag
+  (`structure/pin-clause`, the one answer the query compiler, the law engine's scope clause and the
+  generated target checks all ask): a `:structure/of` triple for a sort whose instances all carry
+  its tag, its ns-precise kind-rule call for a genus or a derived sort, whose instances do not. The
+  bare rule call `(Sort ?x)` stays the deliberate CO-LOAD UNION (any same-short-named sort). Never
   hand-write a `[?x :structure/of <qualified-tag>]` guard in vocab laws/defrelations.
   Evaluated contexts (REPL `focus`, `q`) pass the qualified tag — a bare symbol resolves only
   in declaration forms. SPELLING converges to the most-resolved reader form available:

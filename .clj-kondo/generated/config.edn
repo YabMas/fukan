@@ -44,6 +44,11 @@
    fukan.canvas.core.namespacing-test/KindAudit hooks.fukan.structure/instance
    fukan.canvas.core.namespacing-test/Marked hooks.fukan.structure/instance
    fukan.canvas.core.namespacing-test/TaggedAudit hooks.fukan.structure/instance
+   fukan.canvas.core.refinement-test/Holder hooks.fukan.structure/instance
+   fukan.canvas.core.refinement-test/Op hooks.fukan.structure/instance
+   fukan.canvas.core.refinement-test/Other hooks.fukan.structure/instance
+   fukan.canvas.core.refinement-test/Routine hooks.fukan.structure/instance
+   fukan.canvas.core.refinement-test/RoutineAudit hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Correspondence hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Law hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Relation hooks.fukan.structure/instance
