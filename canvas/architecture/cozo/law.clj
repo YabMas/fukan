@@ -17,15 +17,15 @@
   "Compile defstructure laws' datalog → CozoScript (via the cozo-query compiler) over the
    Cozo substrate and run them — the Cozo analog of structure/check."
   (Operation compile-law
-    "Compile a law's offender query (offenders + its :rules + where, scope-clause prepended for a direct/facet tag) → a CozoScript program via the query compiler (compile-body emits the rules in its closure), then the `?` entry. Throws on an unsupported form."
-    {:signature [:=> [:catn [:law :any] [:direct-tags :any] [:index :any]] :string]
+    "Compile a law's offender query (offenders + its :rules + where, with the algebra's scope clause prepended for a non-global law) → a CozoScript program via the query compiler (compile-body emits the rules in its closure), then the `?` entry. Throws on an unsupported form."
+    {:signature [:=> [:catn [:law :any] [:index :any]] :string]
      :performs  [:state :throws]
-     :delegates [cquery/compile-body cquery/cvar]})
+     :delegates [cquery/compile-body cquery/cvar kstructure/pin-clause]})
   (Operation check-structural
     "Run every law over the Cozo db, returning offenders (or :unsupported for laws whose form isn't compiled yet). Compiles each law to CozoScript, except the scalar TYPE-CHECK laws, which run a HYBRID — Cozo finds each instance's leaf value, typing/value-valid? (malli) checks it. The Cozo analog of structure/check."
     {:signature [:=> [:catn [:cdb db/CozoDb]] :any]
      :performs  [:state :throws]
-     :delegates [kstructure/all-structures kstructure/direct-scope-tags cquery/vocab-index
+     :delegates [kstructure/all-structures cquery/vocab-index
                  ktyping/value-valid? db/q]})
   (Operation check
     "Run every law over the Cozo db and return its VIOLATIONS — the drift list (the violation-only view of check-structural). THE check: it evaluates the laws the kernel defines. Fails closed when any law is unsupported, because an unevaluated constraint cannot establish satisfaction."

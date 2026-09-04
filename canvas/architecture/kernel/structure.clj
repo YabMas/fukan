@@ -64,15 +64,10 @@
    the algebra that mints the names, so the registry refuses a sort-name collision over the same
    fold the query compiler applies."
   {:signature [:=> [:catn [:sym :any]] :string]})
-(Operation direct-scope-tags
-  "Qualified tags whose instances carry :structure/of DIRECTLY, so a scoped law can pin ns-precisely
-   instead of riding the short-name rule. Excludes facets + realized/coproduct/derived concepts."
-  {:signature [:=> [:catn [:structures [:vector :any]]] :any]})
-
 (Module core-structure
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
   {:child [vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
            all-corresponds correspond-by-pair
-           laws-of direct-scope-tags pin-clause rule-name
+           laws-of pin-clause rule-name
            Violation Form                         ; check-output SHAPE (cozo-law produces it) + the print-dual code-form (projections produce it)
            Rule]})                                ; the rules-output type

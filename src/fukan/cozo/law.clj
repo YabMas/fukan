@@ -21,24 +21,22 @@
             [fukan.cozo.query :as query]))
 
 (defn- scope-tag
-  "The structure tag a free law's first offender var is scoped to (nil for :global
-   and for self-scoped slot-derived laws), mirroring `check`."
+  "The structure tag a free law's first offender var is scoped to, or nil when nothing is to be
+   prepended: `:global` declines the auto-scope, and a slot-derived law carries no owner because
+   it already writes its owner's tag into its own body."
   [{:keys [scope owner]}]
   (case scope :global nil, nil owner, scope))
 
-(defn ^{:malli/schema [:=> [:cat :any :any :any] :string]}
+(defn ^{:malli/schema [:=> [:cat :any :any] :string]}
   compile-law
   "Compile a law's offender query → a CozoScript program: the vocab rules in its reference
-   closure, its own `:rules`, helper rules, then the `?` entry. A non-global law's first
-   offender var is bound by a prepended scope clause: `[?o :structure/of tag]` for a DIRECT
-   tag (`direct-tags`), or the short-name rule-call `(Foo ?o)` for a facet/realized concept
-   — mirroring `check`. `index` is the `query/vocab-index`."
-  [{:keys [offenders where rules] :as law} direct-tags index]
+   closure, its own `:rules`, helper rules, then the `?` entry. A non-global law's first offender
+   var is bound by a prepended scope clause the ALGEBRA supplies (`structure/pin-clause`) — the
+   same answer the query compiler's `(is …)` lowering gets, so a law and a query agree about what
+   a sort's instances are. `index` is the `query/vocab-index`."
+  [{:keys [offenders where rules] :as law} index]
   (let [st           (scope-tag law)
-        scope-clause (when st
-                       (if (contains? direct-tags st)
-                         [(first offenders) :structure/of st]
-                         (list (symbol (name st)) (first offenders))))
+        scope-clause (when st (structure/pin-clause st (first offenders)))
         where*       (cond->> where scope-clause (cons scope-clause))
         [rule-lines body] (query/compile-body where* rules index offenders)]
     (str/join "\n" (concat rule-lines
@@ -96,9 +94,8 @@
    for laws whose form (or a vocab rule they read) isn't compiled yet. A type-check law runs
    the hybrid (`value-offenders`); everything else compiles to CozoScript and runs."
   [cdb]
-  (let [index       (query/vocab-index)
-        direct-tags (structure/direct-scope-tags (structure/all-structures))
-        buckets     (query/buckets-of cdb)]
+  (let [index   (query/vocab-index)
+        buckets (query/buckets-of cdb)]
     (vec (for [[tag law] (all-laws)]
            (cond
              (value-check-law law)
@@ -109,7 +106,7 @@
 
              :else
              (let [program (try (binding [query/*attr-buckets* buckets]
-                                  (compile-law law direct-tags index))
+                                  (compile-law law index))
                                 (catch clojure.lang.ExceptionInfo _ ::unsupported))]
                (if (= program ::unsupported)
                  {:structure tag :law (:desc law) :unsupported true}

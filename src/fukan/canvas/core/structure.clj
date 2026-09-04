@@ -1578,15 +1578,6 @@
   [sdef]
   (vec (mapcat #(:laws (lower-declaration % sdef)) (sdef->declarations sdef))))
 
-(defn ^{:malli/schema [:=> [:cat [:vector :any]] :any]}
-  direct-scope-tags
-  "Qualified tags whose instances carry `:structure/of` DIRECTLY, so a law scoped to one can be
-   pinned ns-precisely (`[?o :structure/of tag]`) instead of riding the short-name rule. Excludes
-   realized/coproduct/derived concepts (no instances). For these direct tags two same-short-named
-   structures from different namespaces never cross-scope."
-  [structures]
-  (into #{} (comp (filter stored-membership?) (map :tag)) structures))
-
 (defn ^{:malli/schema [:=> [:cat] [:vector :Rule]]}
   vocab-rules
   "The datalog rules derived from the live vocabulary (one per kind + per relation

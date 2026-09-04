@@ -43,6 +43,7 @@
    fukan.canvas.core.namespacing-test/Kind hooks.fukan.structure/instance
    fukan.canvas.core.namespacing-test/KindAudit hooks.fukan.structure/instance
    fukan.canvas.core.namespacing-test/Marked hooks.fukan.structure/instance
+   fukan.canvas.core.namespacing-test/TaggedAudit hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Correspondence hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Law hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Relation hooks.fukan.structure/instance

@@ -98,10 +98,18 @@
    :doc (str "Fixture: " ns-nm "'s Tagged.")
    :realized-as [['?e :structure/of ::Marked] ['?e :val/side side]]})
 
+(s/register-structure! (derived-tagged "probe.alpha" "alpha"))
+(s/register-structure! (derived-tagged "probe.beta"  "beta"))
+
+;; a law SCOPED to alpha's Tagged. A derived sort declares no laws of its own, so the scope is
+;; named from outside — which is also the only way to have the two sorts differ by nothing but
+;; their namespace.
+(defstructure TaggedAudit
+  "Fixture: a law scoped to one namespace's derived Tagged."
+  (law "alpha-tagged-flag" {:scope :probe.alpha/Tagged :offenders [?e] :where []}))
+
 (deftest is-pins-a-derived-sort-ns-precisely
   (testing "(is ?e Tagged) answers ONE namespace's Tagged where the short-name rule answers both"
-    (s/register-structure! (derived-tagged "probe.alpha" "alpha"))
-    (s/register-structure! (derived-tagged "probe.beta"  "beta"))
     (let [db    (build/vars->cozo [#'marked-a #'marked-b])
           names (fn [q] (set (map first (cq/q q db))))]
       ;; the defect this closes: both pins rode a rule head named for the SHORT name, so the
@@ -113,6 +121,19 @@
           "and beta's the beta-side node alone")
       (is (= #{"a" "b"} (names '[:find ?n :where (Tagged ?e) [?e :entity/name ?n]]))
           "while the SHORT name keeps unioning them, which is what it is for"))))
+
+(deftest law-scope-on-a-derived-sort-is-ns-precise
+  (testing "a law scoped to alpha's Tagged fires on alpha's members alone"
+    (let [db      (build/vars->cozo [#'marked-a #'marked-b])
+          flagged (->> (law/check db)
+                       (filter #(= "alpha-tagged-flag" (:law %)))
+                       (mapcat :offenders)
+                       (map (comp :entity/name #(cq/entity db %) first))
+                       set)]
+      ;; the same defect as the pin above, in the other consumer: the scope clause rode the
+      ;; short-name rule, so this law fired on beta's member too.
+      (is (= #{"a"} flagged)
+          "not #{\"a\" \"b\"} — the scope clause pins the namespace the law named"))))
 
 (deftest colliding-precise-rule-names-are-refused
   (testing "two sorts whose precise rule names fold together are refused, not silently unioned"
