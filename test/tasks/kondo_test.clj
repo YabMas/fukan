@@ -14,8 +14,8 @@
     (is (= 'Effect (kondo/structure-name '(defstructure ^:value Effect "doc" {:name :string})))))
   (testing "an aliased s/defstructure is recognised too"
     (is (= 'Attr (kondo/structure-name '(s/defstructure Attr "doc" {:required :boolean})))))
-  (testing "a realized-as concept interns NO constructor (excluded)"
-    (is (nil? (kondo/structure-name '(defstructure Flagged "doc" (realized-as [(Sum ?e) [?e :val/kind "a"]]))))))
+  (testing "an (eq …) sort interns NO constructor (excluded)"
+    (is (nil? (kondo/structure-name '(defstructure Flagged "doc" (eq [(Sum ?e) [?e :val/kind "a"]]))))))
   (testing "non-defstructure forms yield nil"
     (is (nil? (kondo/structure-name '(defn foo [x] x))))
     (is (nil? (kondo/structure-name '(defrelation :xview "doc" (:eq [:alt :via :x])))))
@@ -26,11 +26,11 @@
 ;; ── source → fully-qualified constructor names ───────────────────────────────
 
 (deftest qualified-names-from-source
-  (testing "constructor names are qualified by the file's ns, in source order, realized-as excluded"
+  (testing "constructor names are qualified by the file's ns, in source order, eq excluded"
     (let [src (str "(ns demo.vocab (:require [x :refer [defstructure]]))\n"
                    "(defstructure Foo \"d\" {:a :string})\n"
                    "(defstructure ^:value Bar \"d\" {:b :int})\n"
-                   "(defstructure Gone \"d\" (realized-as [(Foo ?e)]))\n"
+                   "(defstructure Gone \"d\" (eq [(Foo ?e)]))\n"
                    "(defn helper [x] x)")]
       (is (= ['demo.vocab/Foo 'demo.vocab/Bar]
              (kondo/qualified-names src)))))
@@ -46,7 +46,7 @@
 
 ;; ── scanning the real source tree (the integration validator) ────────────────
 
-(deftest scan-finds-known-structures-and-excludes-realized
+(deftest scan-finds-known-structures-and-excludes-derived
   (let [names (set (kondo/scan ["lib" "common" "canvas" "test"]))]
     (testing "live vocab constructors are found"
       (is (contains? names 'fukan.common.vocab.code.module/Module))
@@ -54,7 +54,7 @@
       (is (contains? names 'fukan.common.typing.malli/Schema))
       (is (contains? names 'fukan.common.vocab.grouping/Grouping))
       (is (contains? names 'fukan.canvas.core.structure-test/Function)))
-    (testing "realized-as concepts intern no constructor → excluded"
+    (testing "(eq …) sorts intern no constructor → excluded"
       (is (not (contains? names 'fukan.canvas.core.composition-test/Flagged)))
       (is (not (contains? names 'fukan.canvas.core.composition-test/VariantA))))))
 

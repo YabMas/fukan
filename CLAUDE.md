@@ -355,7 +355,7 @@ A `defstructure` is a composition of **slots** plus **laws**:
   identity: a species' instance carries exactly ONE stored tag, its own, and the genus's kind rule
   gains one body per species. What a species may declare follows from its own membership — with the
   tag stored on its instances (the default) it is an ordinary sort that happens to be a species,
-  authorable and law-generating; with `(realized-as …)` beside it its members are whatever its rule
+  authorable and law-generating; with `(eq …)` beside it its members are whatever its rule
   derives AMONG THE ONES THE GENUS ALREADY ADMITS (the body is conjoined with the genus's stored
   tags, so a derived species cannot conjure members the genus would not otherwise hold), and it
   declares laws and no slots. Restating a genus's slot is refused, as is a chain that closes on

@@ -153,7 +153,7 @@
             the hand-modelled remainder is the substrate (Node, Relation)"
     (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "core-structure"))
-      (is (= #{"tag" "value" "law" "realizes" "sub"}
+      (is (= #{"tag" "value" "law" "eq" "sub"}
              (set (cq/q '[:find [?l ...]
                          :where [?st :structure/of :fukan.canvas.core.reflect/Structure]
                                 [?st :val/tag ":fukan.canvas.core.reflect/Structure"]

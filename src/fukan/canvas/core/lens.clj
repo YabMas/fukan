@@ -27,7 +27,7 @@
    instance docstring; `:select` is the focus's own executable form — the datalog selection (binding
    `?n`, evaluated by `evaluate-lens`) that resolves the description to a genuine sub-graph. The
    selection lives HERE, not in a realization shim: it is model-native datalog — it references no
-   code, only the graph's own vocabulary, exactly like a law's `:where` or a `realized-as`
+   code, only the graph's own vocabulary, exactly like a law's `:where` or an `eq`
    derivation. It is the focus stated runnably, not a second thing that could drift from it. A lens
    with no `:select` is prose-only (not evaluable).
    A Lens is the OPTIONAL naming act for a focus — the `defrelation` of selections: minted when
@@ -118,7 +118,7 @@
   "Run lens `lens-eid`'s own selection query — the `:val/select` form it carries (its
    `:select` slot) — with the vocab-derived rules, returning the focus node-set (a set of
    eids). The selection is the focus stated runnably (model-native datalog), so it lives ON
-   the lens; no `:realizes` indirection. TOTAL: a prose-only lens (no `:select`) is not
+   the lens; no payload-slot indirection. TOTAL: a prose-only lens (no `:select`) is not
    evaluable, so it yields `nil` — a Maybe (`nil` = not evaluable, distinct from `#{}` =
    evaluated to no nodes), never a throw. This is a trusted-core reader over the Model, so it
    stays total (parse-don't-validate); deciding a prose-only lens is unevaluable is the

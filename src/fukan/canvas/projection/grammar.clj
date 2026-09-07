@@ -129,7 +129,7 @@
     {:name     (symbol (:entity/name e))
      :doc      (:entity/doc e)
      :value?   (boolean (:val/value e))
-     :realizes (when (:val/realizes e) (payload-form (:val/form e)))
+     :eq       (when (:val/eq e) (payload-form (:val/form e)))
      :sub      (genus-of db s)
      :slots    (slots-of db s)
      :laws     (laws-of db s)}))
@@ -154,12 +154,12 @@
    the form somebody wrote. External correspondence
    deliberately does not appear inside this form; use `correspondence-form` for its valid top-level dual."
   [db eid]
-  (let [{:keys [name doc value? slots realizes sub laws]} (parts db eid)]
+  (let [{:keys [name doc value? slots eq sub laws]} (parts db eid)]
     (concat ['defstructure (if value? (with-meta name {:value true}) name)]
             (when doc [doc])
             (when (seq slots) [(apply array-map (mapcat identity slots))])
             (when sub [(list 'sub sub)])
-            (when realizes [(list 'realized-as realizes)])
+            (when eq [(list 'eq eq)])
             (map law-form laws))))
 
 (declare corr-head)
@@ -200,13 +200,13 @@
    the page. Law bodies stay elided either way: the description states the rule, and the datalog
    under it is the mechanism."
   [db s full?]
-  (let [{:keys [name doc value? slots realizes sub laws]} (parts db s)]
+  (let [{:keys [name doc value? slots eq sub laws]} (parts db s)]
     (->> (concat
           [(str "(defstructure " (when value? "^:value ") name)]
           (when doc [(str "  " (if full? (inst/doc-text doc) (pr-str (first-line doc))))])
           (when (seq slots) [(fmt-slots slots)])
           (when sub [(str "  (sub " sub ")")])
-          (when realizes [(str "  (realized-as " (pr-str realizes) ")")])
+          (when eq [(str "  (eq " (pr-str eq) ")")])
           (map #(str "  (law " (pr-str (:desc %)) " …)") laws))
          (str/join "\n")
          (#(str % ")")))))
@@ -318,20 +318,20 @@
 (defn ^{:malli/schema [:=> [:cat :StructureDb] [:vector :string]]} unused-structures
   "The grammar-drift reading: reified Structures no instance inhabits — dead
    vocabulary. Excludes the Any wildcard and derivation-inhabited concepts:
-   realized-as. Sorted structure names. (A reading to reason with, not a gate — law-hosts and
+   eq. Sorted structure names. (A reading to reason with, not a gate — law-hosts and
    not-yet-spoken grammar are legitimate; the human interprets.)"
   [db]
   ;; set-filtering in Clojure (this is a reader, not a law) — a plain membership test over
-  ;; the in-use tags, no datalog negation needed for the no-realized-as case.
+  ;; the in-use tags, no datalog negation needed for the no-eq case.
   ;; `:structure/of` tags are KEYWORDS the mirror stringifies WITHOUT the colon, but `:val/tag` is
   ;; stored WITH it — normalize the in-use tags through `keyword` so the membership test lines up.
   (let [in-use   (into #{} (map (comp str keyword first))
                        (cq/q '[:find ?t :where [_ :structure/of ?t]] db))
-        realized (into #{} (map first)
-                       (cq/q '[:find ?s :where [?s :val/realizes _]] db))]
+        derived  (into #{} (map first)
+                       (cq/q '[:find ?s :where [?s :val/eq _]] db))]
     (->> (cq/q '[:find ?s ?n ?t
                  :where (is ?s ::reflect/Structure)
                         [?s :entity/name ?n] [?s :val/tag ?t]]
                db)
-         (remove (fn [[s _ t]] (or (realized s) (= ":Any" t) (in-use t))))
+         (remove (fn [[s _ t]] (or (derived s) (= ":Any" t) (in-use t))))
          (map second) sort vec)))

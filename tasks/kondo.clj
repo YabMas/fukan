@@ -23,7 +23,7 @@
   "The constructor-macro name a `defstructure` form interns, or nil when the form
    isn't a constructor-bearing defstructure. Recognises both the referred
    `defstructure` and an aliased `s/defstructure` (matched by the head's simple
-   name). A `realized-as` concept interns no constructor, so it is excluded."
+   name). An `(eq …)` sort interns no constructor, so it is excluded."
   [form]
   (when (and (seq? form)
              (symbol? (first form))
@@ -32,7 +32,7 @@
           body     (drop 2 form)
           realized? (some (fn [f]
                             (and (seq? f) (symbol? (first f))
-                                 (= "realized-as" (name (first f)))))
+                                 (= "eq" (name (first f)))))
                           body)]
       (when (and (symbol? name-sym) (not realized?))
         (symbol (name name-sym))))))

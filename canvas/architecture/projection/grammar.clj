@@ -58,7 +58,7 @@
   (Operation unused-structures
     "The grammar-drift reading: reified Structures no instance inhabits — dead
      vocabulary. Excludes the Any wildcard and derivation-inhabited concepts:
-     realized-as, and facets reached via includes (found by the loop's first
+     eq, and facets reached via includes (found by the loop's first
      run — Connected is spoken, just never directly). Sorted structure names."
     {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector :string]]
      :performs  [:throws :state]}))

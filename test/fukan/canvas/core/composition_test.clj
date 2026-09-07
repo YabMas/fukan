@@ -21,20 +21,20 @@
   {:flag :boolean})
 
 (defstructure Flagged
-  "A realized concept: a Note whose flag is true — derived membership, NO constructor."
-  (realized-as [(Note ?e) [?e :val/flag true]]))
+  "A derived sort: a Note whose flag is true — derived membership, NO constructor."
+  (eq [(Note ?e) [?e :val/flag true]]))
 
-(deftest realized-as-parsed-and-no-constructor
-  (testing "(realized-as …) registers the where-clauses and emits no constructor var"
+(deftest eq-parsed-and-no-constructor
+  (testing "(eq …) registers the where-clauses and emits no constructor var"
     (is (= '[(Note ?e) [?e :val/flag true]]
-           (:realized-as (s/structure-by-tag ::Flagged))))
+           (:eq (s/structure-by-tag ::Flagged))))
     (is (not (contains? (ns-interns 'fukan.canvas.core.composition-test) 'Flagged))
-        "a realized concept defines no constructor (it is never instantiated)")))
+        "a derived sort defines no constructor (it is never instantiated)")))
 
 (Note nt-on  {:flag true})
 (Note nt-off {:flag false})
 
-(deftest realized-membership-is-derived
+(deftest eq-membership-is-derived
   (testing "(Flagged ?e) returns exactly the flag=true Notes"
     (let [db    (build/vars->cozo [#'nt-on #'nt-off])
           names (set (cq/q '[:find [?nm ...] :in $ %
@@ -42,19 +42,19 @@
                           db (s/vocab-rules)))]
       (is (= #{"nt-on"} names)))))
 
-;; compound: a realized concept whose rule references another realized rule (the Inspect shape)
+;; compound: a derived sort whose rule references another derived rule (the Inspect shape)
 (defstructure Holder
   "A base concept holding a Note."
   {:holds Note})
 (defstructure FlaggedHolder
-  "Realized: a Holder holding a Flagged Note — a rule that references another realized rule."
-  (realized-as [(Holder ?e) [?r :rel/from ?e] [?r :rel/kind :holds] [?r :rel/to ?n] (Flagged ?n)]))
+  "Derived: a Holder holding a Flagged Note — a rule that references another derived rule."
+  (eq [(Holder ?e) [?r :rel/from ?e] [?r :rel/kind :holds] [?r :rel/to ?n] (Flagged ?n)]))
 
 (Holder hold-on  {:holds nt-on})
 (Holder hold-off {:holds nt-off})
 
-(deftest realized-rule-references-another-realized-rule
-  (testing "FlaggedHolder realizes via Flagged — the inspect-over-signal composition"
+(deftest eq-rule-references-another-eq-rule
+  (testing "FlaggedHolder derives via Flagged — the inspect-over-signal composition"
     (let [db    (build/vars->cozo [#'nt-on #'nt-off #'hold-on #'hold-off])
           names (set (cq/q '[:find [?nm ...] :in $ %
                             :where (FlaggedHolder ?e) [?e :entity/name ?nm]]
@@ -68,8 +68,8 @@
   (law "every Sum is a VariantA or a VariantB"
     {:offenders [?s]
      :where [(not (VariantA ?s)) (not (VariantB ?s))]}))
-(defstructure VariantA "Realized variant: kind = a." (realized-as [(Sum ?e) [?e :val/kind "a"]]))
-(defstructure VariantB "Realized variant: kind = b." (realized-as [(Sum ?e) [?e :val/kind "b"]]))
+(defstructure VariantA "Derived variant: kind = a." (eq [(Sum ?e) [?e :val/kind "a"]]))
+(defstructure VariantB "Derived variant: kind = b." (eq [(Sum ?e) [?e :val/kind "b"]]))
 
 (Sum sum-a {:kind "a"})
 (Sum sum-b {:kind "b"})
@@ -80,34 +80,36 @@
     (let [db (build/vars->cozo [#'sum-a #'sum-b #'sum-c])]
       (is (= #{"sum-c"} (offenders-of db "every Sum is a VariantA or a VariantB"))))))
 
-;; ── realized-concept guard ──────────────────────────────────────────────────
+;; ── derived-sort guard ──────────────────────────────────────────────────
 
-(defn- throws-realized-msg?
+(defn- throws-eq-msg?
   "True when evaluating `form` throws an exception (possibly wrapped in a
-   CompilerException) whose cause chain contains a message matching #\"realized\"."
+   CompilerException) whose cause chain names the `(eq …)` form — which both guard
+   messages do, one for combining it with slots/reader/^:value and one for declaring
+   it twice."
   [form]
   (try (eval form) false
        (catch Exception e
-         (boolean (some #(re-find #"realized" (or (.getMessage %) ""))
+         (boolean (some #(re-find #"\(eq" (or (.getMessage %) ""))
                         (take-while some? (iterate #(.getCause %) e)))))))
 
-(deftest realized-concept-rejects-extra-clauses
-  (testing "(realized-as …) may not be combined with slots/reader/^:value"
-    (is (throws-realized-msg?
+(deftest eq-sort-rejects-extra-clauses
+  (testing "(eq …) may not be combined with slots/reader/^:value"
+    (is (throws-eq-msg?
           '(fukan.canvas.core.structure/defstructure BadRealized "d"
-             (realized-as [(Note ?e)])
+             (eq [(Note ?e)])
              {:x :boolean}))
-        "realized-as + slot is rejected — nothing carries a derived sort's tag, so nothing could
+        "eq + slot is rejected — nothing carries a derived sort's tag, so nothing could
          hold the slot's value")
-    (is (throws-realized-msg?
+    (is (throws-eq-msg?
           '(fukan.canvas.core.structure/defstructure BadRealized3 "d"
-             (realized-as [(Note ?e)])
-             (realized-as [(Note ?e)])))
-        "multiple realized-as is rejected"))
+             (eq [(Note ?e)])
+             (eq [(Note ?e)])))
+        "multiple eq is rejected"))
   (testing "a LAW is allowed: it scopes through the membership rule, which is what a derived sort has"
-    (is (false? (throws-realized-msg?
+    (is (false? (throws-eq-msg?
                   '(fukan.canvas.core.structure/defstructure OkRealizedLaw "d"
-                     (realized-as [(Note ?e)])
+                     (eq [(Note ?e)])
                      (law "fine" {:offenders [?e] :where [[?e :val/n "z"]]})))))))
 
 ;; ── transitive closure fixtures: a delegates chain a → b → c ────────────────

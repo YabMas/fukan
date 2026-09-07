@@ -5,7 +5,7 @@
    tag — its own — and the genus's kind rule gains one body per species, so the substrate stores
    what it always stored and the genus is answered by a rule the lowering already knew how to
    emit. What a refinement may DECLARE follows from its own membership: with the tag stored on its
-   instances it is an ordinary sort that happens to be a species, and with `(realized-as …)`
+   instances it is an ordinary sort that happens to be a species, and with `(eq …)`
    beside it its members are whatever its rule derives among those the genus already admits."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.query :as cq]
@@ -41,7 +41,7 @@
 ;; a DERIVED species: its body would derive Other's instance too, and the genus confines it
 (defstructure Flagged
   "Fixture species, derived membership: the flagged Routines."
-  (realized-as [[?e :val/sig "flag"]])
+  (eq [[?e :val/sig "flag"]])
   (sub Routine)
   (law "flagged-flag" {:offenders [?f] :where []}))
 
@@ -145,7 +145,7 @@
 (deftest a-derived-species-declares-laws-and-no-slots
   (is (refuses? #"may not also"
                 '(fukan.canvas.core.structure/defstructure BadDerivedSpecies "d"
-                   (realized-as [[?e :val/sig "x"]])
+                   (eq [[?e :val/sig "x"]])
                    (sub :fukan.canvas.core.refinement-test/Routine)
                    {:extra [:? :string]}))
       "nothing carries a derived sort's tag, so nothing could hold a slot's value"))

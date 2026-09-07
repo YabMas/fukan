@@ -63,14 +63,14 @@
   "A registered defstructure, reified into the graph it defines. Slots are
    `:slot/<card>` edges (see the ns doc), not declared here; `:tag` is the
    instance-join key (an instance's mirror-stringified `:structure/of` names the
-   Structure whose `:val/tag` is its colon-prefixed form); a realized concept
-   carries its membership datalog as the `:form` payload of `:realizes`, and a SPECIES the genus
+   Structure whose `:val/tag` is its colon-prefixed form); a derived sort
+   carries its membership datalog as the `:form` payload of `:eq`, and a SPECIES the genus
    its declaration named as a `:sub` edge — an edge rather than a payload because a genus is a
    reflected node, so the meta-grammar gains the relation and a reader can walk it."
   {:tag      :string
    :value    [:? :boolean]
    :law      [:* Law]
-   :realizes [:? {:payload :form} :string]
+   :eq       [:? {:payload :form} :string]
    :sub      [:? Structure]}
   ;; TOTALITY — the reflector's self-check. A Structure's identity IS its defining namespace, so every
   ;; reified Structure is the target of a `:child` edge from its `Vocabulary`. The synthetic `:Any`
@@ -146,11 +146,11 @@
 
 (defn- sdef-clauses
   "Every datalog clause an sdef's own declarations carry: its laws' `:where` (+ the bodies of any
-   inline `:rules`) and its `realized-as` membership body. The clause surface the presentation-fragment
+   inline `:rules`) and its `eq` membership body. The clause surface the presentation-fragment
    derivations (closure + imports) walk for cross-vocabulary rule calls."
   [sd]
   (concat (mapcat (fn [l] (concat (:where l) (mapcat rest (:rules l)))) (:laws sd))
-          (:realized-as sd)))
+          (:eq sd)))
 
 (defn- expr-atoms
   "The relation names an inclusion expression references — the atoms of the regular term
@@ -198,7 +198,7 @@
 (defn- reflect-structure
   "One sdef → {:nodes … :rels …} for its Structure node, Law children, slot edges,
    the genus it names, and any Schema value targets."
-  [{:keys [tag doc laws value? realized-as sub] :as sdef}]
+  [{:keys [tag doc laws value? eq sub] :as sdef}]
   (let [sid  (structure-id tag)
         ;; the AUTHORED slots, not the effective ones: this graph is a presentation of
         ;; DECLARATIONS, and the print-dual reads it back as the declaration somebody wrote. A
@@ -211,7 +211,7 @@
                       :entity/name (name tag) :val/tag (str tag)}
                doc         (assoc :entity/doc doc)
                value?      (assoc :val/value true)
-               realized-as (assoc :val/realizes (pr-str realized-as) :val/form realized-as))
+               eq          (assoc :val/eq (pr-str eq) :val/form eq))
         slot-bits
         (->> slots
              (map-indexed

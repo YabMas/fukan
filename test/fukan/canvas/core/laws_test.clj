@@ -435,8 +435,8 @@
 ;; ── (is ?v Sort): declaration-site sort resolution + compiler lowering ─────────
 
 (defstructure IsThing "is-fixture: a direct sort." {:t [:? :string]})
-(defstructure IsOn "is-fixture: realized — an IsThing whose t is \"on\"."
-  (realized-as [(is ?e IsThing) [?e :val/t "on"]]))
+(defstructure IsOn "is-fixture: derived — an IsThing whose t is \"on\"."
+  (eq [(is ?e IsThing) [?e :val/t "on"]]))
 (defstructure IsAudit
   "is-fixture: a global law over the ns-precise sort — every IsThing carries t."
   (law "every IsThing has t"
@@ -461,9 +461,9 @@
     (let [audit (first (filter #(= "every IsThing has t" (:desc %))
                                (s/laws-of (s/structure-by-tag ::IsAudit))))]
       (is (= '(is ?x :fukan.canvas.core.laws-test/IsThing) (first (:where audit))))))
-  (testing "a realized concept's rule body resolves too"
+  (testing "a derived sort's rule body resolves too"
     (is (= '(is ?e :fukan.canvas.core.laws-test/IsThing)
-           (first (:realized-as (s/structure-by-tag ::IsOn))))))
+           (first (:eq (s/structure-by-tag ::IsOn))))))
   (testing "the defining structure's own name resolves before its registration (self-tag)"
     (let [self (first (filter #(= "no self-next" (:desc %))
                               (s/laws-of (s/structure-by-tag ::IsSelf))))]
@@ -480,7 +480,7 @@
     (testing "(is ?n <tag>) works in an evaluated context — the compiler lowers the tag form"
       (is (= 2 (count (cq/q '[:find ?n :in $ % :where (is ?n ::IsThing)]
                             db (s/vocab-rules))))))
-    (testing "a realized sort lowers to its kind-rule call"
+    (testing "a derived sort lowers to its kind-rule call"
       (is (= 1 (count (cq/q '[:find ?n :in $ % :where (is ?n ::IsOn)]
                             db (s/vocab-rules))))))))
 

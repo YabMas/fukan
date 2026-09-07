@@ -26,7 +26,7 @@
          a query pays for it only when its reachability closure references it")))
 
 (deftest adapter-omits-node-kind-for-derived-concepts
-  (is (not (contains? (set (map :kind (s/sdef->declarations {:tag ::R :realized-as '[[?e :x]]})))
+  (is (not (contains? (set (map :kind (s/sdef->declarations {:tag ::R :eq '[[?e :x]]})))
                       :kind))))
 
 (deftest closed-relation-heads-reject-other-contributors

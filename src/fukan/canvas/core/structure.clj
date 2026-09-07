@@ -73,7 +73,7 @@
    sort whose members are DERIVED by a rule. Only a stored-membership sort has instances of its
    own, so only it can be pinned by a triple, interned as a constructor, or own a generated law."
   [sdef]
-  (not (or (:realized-as sdef) (:relation-coproduct sdef) (:derived-rule sdef))))
+  (not (or (:eq sdef) (:relation-coproduct sdef) (:derived-rule sdef))))
 
 (defn- species-of
   "Every registered sort that directly names `tag` as its genus."
@@ -904,18 +904,18 @@
 (defn ^:export sdef->declarations
   "Adapt an sdef (built by the unchanged parser) into typed declaration maps for the registry — a
    pure re-expression of the sdef's fields; the parser is untouched. `:kind :kind` is the node-kind
-   membership Term, emitted only for CONCRETE structures (not realized/coproduct/derived concepts);
+   membership Term, emitted only for CONCRETE structures (not `eq`/coproduct/derived concepts);
    `:kind :sub` is the genus a species declared, which grows THAT sort's membership rule.
    (Cross-tag correspondence is a separate declaration form — `correspond`, below — lowered on its
    own path through `terms-of`, not merged in here.)"
-  [{:keys [slots laws realized-as relation-element relation-incl derived-rule sub] :as sdef}]
+  [{:keys [slots laws eq relation-element relation-incl derived-rule sub] :as sdef}]
   (concat
-   (when-not (or realized-as relation-element derived-rule) [{:kind :kind}])
+   (when-not (or eq relation-element derived-rule) [{:kind :kind}])
    (when sub [{:kind :sub :genus sub}])
    ;; only a sort whose instances carry its tag has slots to check: a derived sort's members are
    ;; other sorts' instances, so a slot law pinned to its tag would pin nothing.
    (when (stored-membership? sdef) (for [sl slots] {:kind :slot :slot sl}))
-   (when realized-as   [{:kind :realized-as :body realized-as}])
+   (when eq            [{:kind :eq :body eq}])
    (when relation-incl [{:kind :relation-incl :dir (:incl relation-incl) :expr (:expr relation-incl)}])
    (when derived-rule  [{:kind :defrelation :rule derived-rule}])
    (for [law laws] {:kind :free-law :law law})))
@@ -926,7 +926,7 @@
 ;; identity an instance reference uses) — where `(Module ?m)` reads ANY co-loaded Module (the
 ;; deliberate union). Resolution is PARSE-side (the declaring ns is live; the phase line holds —
 ;; only the signature is consulted); the LOWERING — a `:structure/of` triple for a direct tag,
-;; the kind-rule call for a realized/facet concept — is the query compiler's
+;; the kind-rule call for a derived/facet concept — is the query compiler's
 ;; (`fukan.cozo.query/compile-clause`), so a resolved `(is ?v <tag>)` works uniformly in law
 ;; bodies, rule bodies, and evaluated contexts (which pass the qualified tag — a bare symbol
 ;; resolves only in a declaration form). A sort must be declared BEFORE the clause that names
@@ -956,7 +956,7 @@
 (defn- resolve-is-clause
   "Resolve the sort NAME in one `(is ?v Sort)` clause → `(is ?v <qualified-tag>)`. A symbol
    resolves self-tag first (the defining scope), then by var (requires-based), then by a
-   same-ns registered tag (realized concepts intern no var); a keyword passes through
+   same-ns registered tag (derived sorts intern no var); a keyword passes through
    (validated at compile). Anything else — or an unresolvable symbol — throws, naming the sort."
   [c]
   (if-not (and (seq? c) (= 'is (first c)))
@@ -1216,13 +1216,13 @@
    answers the genus's membership rule, and may add slots and laws of its own. What it may declare
    follows from its own membership. With the tag stored on its instances (the default) it is an
    ordinary sort that happens to be a species — authorable, slot-declaring, law-generating. With
-   `(realized-as …)` beside it, its members are whatever its rule derives among the ones the genus
+   `(eq …)` beside it, its members are whatever its rule derives among the ones the genus
    already admits, so it declares laws and no slots (a law pinned to a tag nothing carries would
    pin nothing). Restating a slot the genus declares is refused: that duplication is what
    refinement removes, and a species could otherwise weaken a constraint its genus states.
 
    Body forms must be the slots map or (law ...) / (reader ...) / (syntax ...) /
-   (realized-as ...) / (sub ...); anything else is rejected
+   (eq ...) / (sub ...); anything else is rejected
    at macro-expansion time (a silently-dropped form is a footgun). Correspondence is
    declared EXTERNALLY via `(correspond Target …)`, never inside the defstructure.
 
@@ -1231,10 +1231,10 @@
   [sname docstring & body]
   (doseq [form body]
     (when-not (or (map? form)
-                  (and (seq? form) (#{'law 'reader 'syntax 'realized-as 'sub} (first form))))
+                  (and (seq? form) (#{'law 'reader 'syntax 'eq 'sub} (first form))))
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
                            " — expected a slots map, (law ...), (reader ...), (syntax ...), "
-                           "(realized-as ...) or (sub ...)")
+                           "(eq ...) or (sub ...)")
                       {:structure sname :form form}))))
   (when (> (count (filter map? body)) 1)
     (throw (ex-info (str "defstructure " sname ": multiple slots maps — declare all slots in one map")
@@ -1280,30 +1280,30 @@
         ;; parsing, so a structure owns its surface sugar (e.g. Operation's `->`) — NOT core.
         syntax-form (some (fn [f] (when (= 'syntax (first f)) (second f)))
                           (filter #(= 'syntax (first %)) body))
-        realized (some (fn [f] (when (= 'realized-as (first f)) (resolve-sorts (unquote-lit (second f)))))
-                       (filter #(= 'realized-as (first %)) body))
+        eq       (some (fn [f] (when (= 'eq (first f)) (resolve-sorts (unquote-lit (second f)))))
+                       (filter #(= 'eq (first %)) body))
         ;; DERIVED membership means the sort has no instances of its own: nothing carries its tag,
         ;; so it can hold no slot value and intern no constructor. Laws it may declare — they scope
         ;; through its membership rule, which is exactly what a derived sort has.
-        _      (when realized
+        _      (when eq
                  (when (or (seq own) value? reader-form)
                    (throw (ex-info (str "defstructure " sname
-                                        ": a realized concept (realized-as) is pure derived membership —"
+                                        ": a derived sort (eq) is pure derived membership —"
                                         " its members are instances of other sorts, so it may not also"
                                         " declare slots, a reader, or ^:value")
                                    {:structure sname})))
-                 (when (> (count (filter #(and (seq? %) (= 'realized-as (first %))) body)) 1)
-                   (throw (ex-info (str "defstructure " sname ": multiple (realized-as …) forms")
+                 (when (> (count (filter #(and (seq? %) (= 'eq (first %))) body)) 1)
+                   (throw (ex-info (str "defstructure " sname ": multiple (eq …) forms")
                                    {:structure sname}))))
         sdef   (cond-> {:tag tag :doc docstring :slots slots :laws laws :value? value?
-                        :realized-as realized}
+                        :eq eq}
                  sub (assoc :sub sub :authored-slots own))]
     `(do
        (register-structure! (cond-> '~sdef
                               ~reader-form (assoc :reader ~reader-form)
                               ~syntax-form (assoc :syntax ~syntax-form)))
        ~(cond
-          realized nil                                   ; realized concept: no constructor
+          eq       nil                                   ; derived sort: no constructor
           value?   `(defmacro ~sname ~docstring [& body#]
                       (fukan.canvas.core.structure/value-form ~tag body#))
           :else    `(defmacro ~sname ~docstring [& args#]
@@ -1629,7 +1629,7 @@
       ;; both spellings of one membership: the short-name rule (the cross-namespace union) and the
       ;; ns-precise rule `pin-clause` asks by. A stored sort needs no precise rule unless it is a
       ;; genus — its triple already pins it exactly — so derived membership always emits the pair.
-      :realized-as
+      :eq
       (let [body (filterv some?
                           (cond-> (vec body)
                             (:sub sdef) (conj (admissible-clause (:sub sdef) '?e))))]

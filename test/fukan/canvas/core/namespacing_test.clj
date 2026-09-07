@@ -96,7 +96,7 @@
   [ns-nm side]
   {:tag (keyword ns-nm "Tagged") :ns ns-nm :slots [] :laws []
    :doc (str "Fixture: " ns-nm "'s Tagged.")
-   :realized-as [['?e :structure/of ::Marked] ['?e :val/side side]]})
+   :eq [['?e :structure/of ::Marked] ['?e :val/side side]]})
 
 (s/register-structure! (derived-tagged "probe.alpha" "alpha"))
 (s/register-structure! (derived-tagged "probe.beta"  "beta"))
