@@ -3,7 +3,8 @@
 **Status:** Design principles — *how* the system is shaped.
 
 **Companion to** [VISION.md](./VISION.md) (the why), [THEORY.md](./THEORY.md) (the
-theoretical foundations), [MODEL.md](./MODEL.md) (the substrate spec), and
+theoretical foundations), [MODELLING.md](./MODELLING.md) (which construct to reach
+for), [MODEL.md](./MODEL.md) (the substrate spec), and
 [DECISIONS.md](./DECISIONS.md) (the decision trace).
 
 ---
@@ -103,6 +104,19 @@ A structure is a *composition of slots* plus *datalog laws*.
   Cozo query compiler lowers stratified negation correctly, so no negation-routing
   dance is needed). `(structure/check db)` runs every law and returns the
   violations.
+- **Sort inclusion mirrors relation inclusion**, one word per direction.
+  `(sub Genus)` declares this sort a KIND OF another: it inherits the genus's
+  slots, answers the genus's kind rule, and may add slots and laws of its own —
+  the unary analogue of `(:sub R)`, contributing to an open head, so a genus grows
+  when a species is declared and never when the genus is edited. `(eq …)` defines
+  membership by a datalog body instead — the unary `(:eq E)`, a closed definition
+  — so the sort stores no tag on anything, interns no constructor, and may declare
+  laws but no slots. Beside a `(sub …)` the body is confined to the members its
+  genus already admits. Restating a genus's slot is refused (on the NAME, so
+  narrowing is refused too): shared *constraints* belong in a genus law, which
+  scopes through the kind rule and reaches every species, where shared *slots*
+  would only be copied down. Which of the two to reach for — and when to enumerate
+  a union at the use site instead — is [MODELLING.md](./MODELLING.md).
 - **Relations are ELEMENTS** (`defrelation`, sibling of `defstructure`) — three
   forms, one construct: BARE (`(defrelation :contains "doc")` — an OPEN primitive/genus
   claiming the name), an INCLUSION against a regular expression over relations

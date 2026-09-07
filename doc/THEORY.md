@@ -3,8 +3,9 @@
 **Status:** The theoretical foundations — what fukan's mechanisms are instances *of*.
 
 **Companion to** [VISION.md](./VISION.md) (the why), [DESIGN.md](./DESIGN.md) (the
-design principles), [MODEL.md](./MODEL.md) (the substrate spec), and
-[DECISIONS.md](./DECISIONS.md) (the decision trace).
+design principles), [MODELLING.md](./MODELLING.md) (which construct to reach for),
+[MODEL.md](./MODEL.md) (the substrate spec), and [DECISIONS.md](./DECISIONS.md) (the
+decision trace).
 
 ---
 
@@ -56,6 +57,12 @@ whose type and cardinality declarations generate constraints. Sorts are therefor
 predicates constrained over one relational universe, not disjoint carrier sets of
 an independently implemented many-sorted logic.
 
+Subsumption between sorts inherits that reading and adds nothing to it. `(sub G)`
+contributes a rule body to `G`'s kind predicate, so a species' membership implies
+its genus's; the claim is set inclusion, discharged by a Horn clause. No
+representation is shared and no dispatch exists, which is why the surface
+resemblance to record subtyping is spelling rather than semantics.
+
 The supported sentence language is the Datalog subset compiled by the Cozo
 engine, including stratified negation, regular-path expansion, and stratified
 aggregation, together with an explicit set of configured semantic built-ins.
@@ -84,6 +91,8 @@ them. This table is the frame's contract with the codebase.
 | `(:sup E)` relation inclusion | a definition that contributes `E` to an open relation head |
 | `(:eq E)` relation inclusion | a closed definition of a relation by `E`; other contributors to the head are rejected |
 | `(:sub R)` relation inclusion | an accumulative extension: this relation contributes its edges to the open head `R` |
+| `(sub G)` sort inclusion | the unary analogue of `(:sub R)`: this sort contributes its members to the open kind predicate `G`, which is therefore extensible without editing `G` |
+| `(eq φ)` sort definition | the unary analogue of `(:eq E)`: membership defined by `φ`, conjoined with the members its genus already admits; the sort stores no tag and interns no constructor |
 | inline path `E` | the deliberately small regular-path surface fragment; compound recursion graduates to a named `defrelation` |
 | `measure` | stratified aggregation, lowered to an auxiliary rule head |
 | `correspond` | a **bridge presentation** over design and fact vocabularies: two typed queries and a realization map, lowering to definitional pairing and `realized-*` rules; constraints are ordinary laws authored over those rules, riding the codomain structures |
@@ -285,6 +294,21 @@ constrained enough to make that freedom dependable.
 - **One logic.** The sentence language is not a plug-point. Generalizing to
   multiple institutions is neither implemented nor required by the current
   verified-modelling aim.
+- **Correspondence pins a sort literally.** `correspond-terms` writes
+  `:structure/of` triples for the head sorts rather than asking the membership
+  algebra (`pin-clause`), as the query compiler and the law engine both do. A
+  correspondence declared at a genus therefore pairs the genus's own direct
+  instances and silently misses every species; `^:value` reflexivity is pinned the
+  same way. Reading the bridge as holding between concrete twins would justify
+  this, but that reading is not stated anywhere, so today it is a default rather
+  than a decision.
+- **Subsumption re-scopes existing laws.** A kind predicate is open, so declaring
+  `(sub G)` widens every law already scoped to `G` to the new species. This is the
+  mechanism behaving correctly — a law about a sort is a law about its members —
+  but the laws were authored when `G` meant something narrower and nothing in the
+  change shows them moving. The practical consequence is a modelling rule rather
+  than a fix (introduce a genus above a concrete sort, never refine one that
+  carries laws); see [MODELLING.md](./MODELLING.md).
 
 ## Lineage
 

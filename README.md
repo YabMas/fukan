@@ -202,7 +202,7 @@ src/fukan/
   infra/              model lifecycle + composition root
 .paused/              the browser viewer stack (deferred indefinitely)
 .legacy-allium/       pre-canvas Allium/Boundary specs (read-only baseline)
-doc/                  the vision, theory, design, substrate spec, and decision trace
+doc/                  the vision, theory, design, modelling guide, substrate spec, and decision trace
 ```
 
 ## License

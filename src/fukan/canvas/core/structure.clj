@@ -1221,6 +1221,16 @@
    pin nothing). Restating a slot the genus declares is refused: that duplication is what
    refinement removes, and a species could otherwise weaken a constraint its genus states.
 
+   WHICH TO REACH FOR. Both spell a union, and both lower through `pin-clause` into the same
+   generated target-type law — so the choice is not about the check but about who must be edited
+   when a case is added. `(eq …)` names the union in ONE place and says what qualifies: a CLOSED
+   sum, extended by editing it. `(sub …)` is declared on the MEMBER, so the genus grows without
+   being touched: the OPEN sum, and the only spelling that admits a case with nothing existing
+   edited. A union local to one slot needs neither — enumerate the targets there
+   (`[:* Operation Kind Module]`). Shared CONSTRAINTS belong in a genus `(law …)`, which scopes
+   through the kind rule and so reaches every species; shared SLOTS do not, because a species
+   that needs a narrower one has nowhere to put it. See doc/MODELLING.md.
+
    Body forms must be the slots map or (law ...) / (reader ...) / (syntax ...) /
    (eq ...) / (sub ...); anything else is rejected
    at macro-expansion time (a silently-dropped form is a footgun). Correspondence is
