@@ -141,6 +141,7 @@
    fukan.common.vocab.grouping/Grouping hooks.fukan.structure/instance
    fukan.common.vocab.patterns.fulfilment/Fulfilment hooks.fukan.structure/instance
    fukan.common.vocab.patterns.plug-point/PlugPoint hooks.fukan.structure/instance
+   fukan.cozo.entity-test/EThing hooks.fukan.structure/instance
    fukan.cozo.measure-test/MtCrate hooks.fukan.structure/instance
    fukan.cozo.measure-test/MtThing hooks.fukan.structure/instance
    fukan.model.pipeline-test/ECard hooks.fukan.structure/instance}}}

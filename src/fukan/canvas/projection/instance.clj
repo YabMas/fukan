@@ -211,8 +211,8 @@
    either datalog `:where` clauses (binding `?n`; evaluated with the vocab rules)
    or a collection of eids. Forms sort by (tag, name)."
   [db focus]
-  ;; an eid collection (numbers on ds, STRING handles on cozo) vs datalog clauses (vectors/lists)
-  (let [eids (if (and (coll? focus) (every? (some-fn number? string?) focus)) focus (lens/focus-nodes db focus))
+  ;; an eid collection (native Int handles) vs datalog clauses (vectors/lists)
+  (let [eids (if (and (coll? focus) (every? number? focus)) focus (lens/focus-nodes db focus))
         sorted (sort-by (fn [eid] (let [e (cq/entity db eid)]
                                     [(str (struct-tag e)) (or (:entity/name e) "")]))
                         eids)]
@@ -221,8 +221,11 @@
 ;; ── violations, quoting the offending forms ───────────────────────────────────
 
 (defn- offender-text [db x]
-  ;; an offender is an eid (number on ds, string handle on cozo) — resolve it to its form, else print it
-  (if (and (or (number? x) (string? x)) (:structure/of (cq/entity db x)))
+  ;; An offender cell is an eid — resolve it to its form — or a VALUE, which is already its own
+  ;; name and prints as itself. The guard is `int?`, matching `law/offender-label`: eids are
+  ;; native Ints, so a cell that is a bare NAME (the type-reference a law could not resolve) is
+  ;; not an eid and must never reach `cq/entity`.
+  (if (and (int? x) (:structure/of (cq/entity db x)))
     (instance-text db x)
     (pr-str x)))
 

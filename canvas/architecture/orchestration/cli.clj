@@ -22,6 +22,7 @@
      that never loaded the model can act on. Offenders stay TUPLES: a law binding an edge
      carries both ends, and the second is the half that says what to do."
     {:signature [:=> [:catn [:db :any] [:violations :any]] :any]
+     :performs  [:throws]                          ; reaches entity's refusal through offender-label
      :delegates [cozo-law/offender-label]})
   (Operation -main
     "Entry point: dispatch the verb, build the model under the given spec-dirs, print the

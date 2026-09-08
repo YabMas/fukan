@@ -691,12 +691,26 @@
   entity
   "Resolve `eid` to its attribute map (the `d/entity` replacement): reads the typed buckets,
    so values come back in their real Int/String/Bool types (eid is a native handle), returning
-   `{attr-keyword value}` (nil for an unknown eid). `eid` may be an opaque string/number handle
-   OR an `[attr val]` lookup-ref (resolved to the matching eid first)."
+   `{attr-keyword value}` (nil for an unknown eid). `eid` is a native Int handle OR an
+   `[attr val]` lookup-ref (resolved to the matching eid first).
+
+   The eid goes in the atom's KEY position — the same ⚠ INVARIANT the clause compiler observes,
+   one level below the rules it was written about. `*t_str[e, a, v], e == <eid>` leaves the key
+   free and filters, so it SCANS the bucket; `*t_str[<eid>, a, v]` seeks it. Measured on brian
+   (12k structures): 22.7ms per call against 0.075ms — 300x, and this is the read every offender
+   render makes four times over.
+
+   A NON-INT eid throws rather than answering. Cozo has no way to tell a bare name in key
+   position from a variable, so `*t_int[Clause, a, v]` does not error — it binds `Clause` and
+   matches every row, which is silently the whole db instead of one entity. (Interpolating it
+   unquoted did error, which is how a dangling type-reference used to abort a whole run.)"
   [db eid]
-  (when-let [eid (if (lookup-ref? eid) (resolve-lookup db eid) (str eid))]
+  (when-let [eid (if (lookup-ref? eid) (resolve-lookup db eid) eid)]
+    (when-not (int? eid)
+      (throw (ex-info (str "entity needs an Int eid (or a lookup-ref), got " (pr-str eid))
+                      {:eid eid})))
     (let [rows (mapcat (fn [bucket]
-                         (db/q db (str "?[a, v] := *" bucket "[e, a, v], e == " eid)))
+                         (db/q db (str "?[a, v] := *" bucket "[" eid ", a, v]")))
                        ["t_int" "t_str" "t_bool"])
           m    (reduce (fn [acc [a v]] (assoc acc (keyword a) v)) {} rows)]
       (when (seq m) (assoc m :db/id eid)))))

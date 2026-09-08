@@ -40,8 +40,9 @@
      :delegates [compile-body vocab-index buckets-of db/q]})
   ;; `violation-names` (worklist reader) moved to `cozo-law` beside `check`/`violations-of` — it reads
   ;; check results, so it belongs with evaluation, not the compiler.
-  (Operation entity "Resolve an eid to its typed attribute map — the d/entity replacement."
+  (Operation entity "Resolve an eid to its typed attribute map — the d/entity replacement. The eid reads in the atom's KEY position, so the read is a seek; a non-Int one is refused rather than silently matching every row."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:eid :any]] :any]
+     :performs  [:throws]                          ; refuses an eid that is not an Int handle
      :delegates [db/q]}))
 
 ;; the compiler's plug-point — a pattern-tier node drawn OVER the module (it names its :owner; the
