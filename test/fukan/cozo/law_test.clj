@@ -89,3 +89,43 @@
                                       [?r :rel/from ?from-band]
                                       [?r :rel/to ?to-band]]}
                             {})))))
+
+;; ── the per-law budget ────────────────────────────────────────────────────────
+
+(deftest a-law-that-outruns-its-budget-is-abandoned-not-waited-on
+  (testing "`bounded` gives one law a wall-clock and stops paying when it passes. Without a bound,
+            one pathological law is indistinguishable from a slow project."
+    (binding [law/*law-budget-ms* 50]
+      (is (= :fukan.cozo.law/over-budget
+             (#'law/bounded (fn [] (Thread/sleep 10000) :finished)))))))
+
+(deftest a-law-within-its-budget-answers-normally
+  (binding [law/*law-budget-ms* 5000]
+    (is (= :finished (#'law/bounded (fn [] :finished))))))
+
+(deftest a-law-s-own-throw-reaches-the-caller
+  (testing "the budget must not swallow the failure it was not there to catch — an uncompilable
+            or unevaluable law still has to reach the `:unsupported` path"
+    (binding [law/*law-budget-ms* 5000]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"from the law"
+                            (#'law/bounded (fn [] (throw (ex-info "from the law" {})))))))))
+
+(deftest a-nil-budget-removes-the-bound
+  (binding [law/*law-budget-ms* nil]
+    (is (= :finished (#'law/bounded (fn [] :finished))))))
+
+(deftest check-fails-closed-on-a-law-that-outran-its-budget
+  (testing "an unevaluated sentence is neither satisfied nor refuted, and a law that outran its
+            budget is unevaluated in exactly that sense — so it lands where an uncompilable law
+            lands, and the report names it. Rendering it as a VIOLATION would be the checker
+            reporting its own failure as a failure of the design."
+    (with-redefs [law/check-structural
+                  (fn [_] [{:structure :x/T :law "fast"}
+                           {:structure :x/T :law "the slow one" :over-budget true}])]
+      (try
+        (law/check ::db)
+        (is false "check must throw when a law could not be evaluated in time")
+        (catch clojure.lang.ExceptionInfo e
+          (is (re-find #"per-law budget" (ex-message e)))
+          (is (= ["the slow one"] (mapv :law (:unsupported (ex-data e))))
+              "the offending law names itself, which is the whole point of the bound"))))))

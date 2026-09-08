@@ -109,7 +109,10 @@ structure substrate **is** the model (no separate model-map).
   SCORING only — head vars are not treated as bound, or a predicate over them would be emitted ahead
   of what this body binds and hit the failure above;
   `cozo/law.clj` — compiles every defstructure law → CozoScript and registers the
-  check-engine plug-point (so `structure/check` runs on Cozo); `cozo/build.clj` —
+  check-engine plug-point (so `structure/check` runs on Cozo). It also gives each law a WALL-CLOCK
+  (`*law-budget-ms*`, 120s): a law that outruns it is abandoned and reported as UNDECIDABLE naming
+  itself, which is what an unevaluated sentence is — and is the difference between a one-line report
+  and a profiling session. `cozo/build.clj` —
   the native model→CozoDB build; `cozo/{db,mirror,rules}.clj` — the db handle, datom
   loaders, and the shared CozoScript rule substrate
 - `canvas/ingestion/canvas_source.clj` — ingestion: discover the instance specs under the

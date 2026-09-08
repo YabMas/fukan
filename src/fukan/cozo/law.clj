@@ -94,12 +94,45 @@
          (filter (fn [[_ v]] (false? (typing/value-valid? target (validate-value v)))))
          (mapv (fn [[x _]] [x])))))
 
+(def ^:dynamic *law-budget-ms*
+  "The wall-clock ONE law may take before `check` stops waiting for it. Nil removes the bound.
+
+   A law that overruns is reported as OVER-BUDGET, which `check` treats exactly as it treats a law
+   that would not compile: an unevaluated sentence is neither satisfied nor refuted, so the model
+   is undecidable and the report names the law. Without a bound, one pathological law is
+   indistinguishable from a slow project — a cross-band conformance law that inlined a filtered
+   generator held a 900-namespace run for 28 of its 40 law-seconds, and finding that took a
+   profiling session rather than reading the exit report.
+
+   120s is deliberately far above any law's honest cost (the slowest on a 900-namespace project is
+   ~4s) — this bounds a pathology, it does not police a budget."
+  120000)
+
+(defn- bounded
+  "Run `f` on a daemon thread, giving it `*law-budget-ms*`; `::over-budget` if it does not finish
+   in time, and `f`'s own throw is re-thrown on this thread. The thread is INTERRUPTED and
+   abandoned rather than waited on: a Cozo query is a native call that may not observe the
+   interrupt, and the point of a budget is that the caller stops paying. Daemon, so an abandoned
+   one cannot hold the JVM open at exit."
+  [f]
+  (if-let [ms *law-budget-ms*]
+    (let [p (promise)
+          t (doto (Thread. #(deliver p (try {:value (f)} (catch Throwable e {:thrown e})))
+                           "fukan-law")
+              (.setDaemon true)
+              (.start))]
+      (if-let [r (deref p ms nil)]
+        (if (contains? r :thrown) (throw (:thrown r)) (:value r))
+        (do (.interrupt t) ::over-budget)))
+    (f)))
+
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   check-structural
   "Run every law over the Cozo db `cdb`, returning `[{:structure :law :offenders}]` (offenders
-   = matched eid tuples, native handles) for laws that fire, and `{:structure :law :unsupported true}`
-   for laws whose form (or a vocab rule they read) isn't compiled yet. A type-check law runs
-   the hybrid (`value-offenders`); everything else compiles to CozoScript and runs.
+   = matched eid tuples, native handles) for laws that fire, `{:structure :law :unsupported true}`
+   for laws whose form (or a vocab rule they read) isn't compiled yet, and
+   `{:structure :law :over-budget true}` for one that outran `*law-budget-ms*`. A type-check law
+   runs the hybrid (`value-offenders`); everything else compiles to CozoScript and runs.
 
    The vocab index is compiled INSIDE the bucket binding, with the same map every law then
    compiles against: a rule compiled with no bucket index in force reads a three-way union helper
@@ -107,14 +140,18 @@
    outside would also miss the memo the laws go on to hit."
   [cdb]
   (let [buckets (query/buckets-of cdb)
-        index   (binding [query/*attr-buckets* buckets] (query/vocab-index))]
+        index   (binding [query/*attr-buckets* buckets] (query/vocab-index))
+        fired   (fn [tag law rows]
+                  (cond-> {:structure tag :law (:desc law) :vars (vec (:offenders law))}
+                    (:key law)  (assoc :key (:key law))
+                    (seq rows)  (assoc :offenders (vec rows))))]
     (vec (for [[tag law] (all-laws)]
            (cond
              (value-check-law law)
-             (let [offs (value-offenders cdb (value-check-law law))]
-               (cond-> {:structure tag :law (:desc law) :vars (vec (:offenders law))}
-                 (:key law) (assoc :key (:key law))
-                 (seq offs) (assoc :offenders offs)))
+             (let [offs (bounded #(value-offenders cdb (value-check-law law)))]
+               (if (= offs ::over-budget)
+                 {:structure tag :law (:desc law) :over-budget true}
+                 (fired tag law offs)))
 
              :else
              (let [program (try (binding [query/*attr-buckets* buckets]
@@ -122,13 +159,12 @@
                                 (catch clojure.lang.ExceptionInfo _ ::unsupported))]
                (if (= program ::unsupported)
                  {:structure tag :law (:desc law) :unsupported true}
-                 (try
-                   (let [rows (db/q cdb program)]
-                     (cond-> {:structure tag :law (:desc law) :vars (vec (:offenders law))}
-                       (:key law) (assoc :key (:key law))
-                       (seq rows) (assoc :offenders (vec rows))))
-                   (catch clojure.lang.ExceptionInfo _
-                     {:structure tag :law (:desc law) :unsupported true})))))))))
+                 (let [rows (try (bounded #(db/q cdb program))
+                                 (catch clojure.lang.ExceptionInfo _ ::unsupported))]
+                   (case rows
+                     ::unsupported {:structure tag :law (:desc law) :unsupported true}
+                     ::over-budget {:structure tag :law (:desc law) :over-budget true}
+                     (fired tag law rows))))))))))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   check
@@ -138,16 +174,21 @@
    printing four names in a line and leaving the reader to guess). THE check: it runs the same laws the kernel
    DEFINES (`structure/laws-of`/`all-structures`), which is why check lives here in the engine and
    not as a hollow shell in the kernel — evaluation is the engine's job, the kernel's is definition.
-   Satisfaction is FAIL-CLOSED: if any law cannot be compiled or evaluated, throws with every
-   unsupported law in ex-data. An unevaluated sentence is neither satisfied nor refuted, so returning
-   a green violation list would be a false claim."
+   Satisfaction is FAIL-CLOSED: if any law cannot be compiled, cannot be evaluated, or outran
+   `*law-budget-ms*`, throws with every undecided law in ex-data. An unevaluated sentence is
+   neither satisfied nor refuted, so returning a green violation list would be a false claim —
+   and a law that outran its budget is unevaluated in exactly that sense, which is why it lands
+   here rather than being rendered as a violation of the design."
   [cdb]
   (let [results     (check-structural cdb)
-        unsupported (vec (filter :unsupported results))]
-    (when (seq unsupported)
-      (throw (ex-info (str "cannot decide model satisfaction: " (count unsupported)
-                           " law(s) could not be evaluated")
-                      {:unsupported unsupported})))
+        undecided   (vec (filter (some-fn :unsupported :over-budget) results))]
+    (when (seq undecided)
+      (throw (ex-info (str "cannot decide model satisfaction: " (count undecided)
+                           " law(s) could not be evaluated"
+                           (when-let [over (seq (filter :over-budget undecided))]
+                             (str " — " (count over) " over the " *law-budget-ms*
+                                  "ms per-law budget")))
+                      {:unsupported undecided})))
     (vec (for [r results :when (:offenders r)]
            (select-keys r [:structure :law :key :vars :offenders])))))
 
