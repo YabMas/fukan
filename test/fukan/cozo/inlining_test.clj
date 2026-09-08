@@ -129,3 +129,42 @@
       (is (re-find #"t_str\[a, 'entity/name'" body)
           (str "…to its datoms; got: " body)))))
 
+(deftest an-emitted-rule-body-is-oriented-against-its-head-vars
+  (testing "a rule that survives to be emitted is one the compiler could not fold, and Cozo runs
+            such a call under the caller's bindings — so the head args are what a call site can be
+            expected to bind, and a body opening on a clause that constrains neither of them opens
+            on an unconstrained scan, repeated per binding. Measured on brian: the `fulfils`
+            derivation, authored leading with a `[?r :rel/from _]`, cost 175.4s as the second
+            definition of the namespace-dependency graph and 0.09s with the clause binding its
+            first head var moved to the front — the same 27 rows.
+
+            Asserts the LOWERING: a multi-definition rule (a union — which is what makes it
+            un-inlinable) whose first definition is authored scan-first."
+    (let [d     (db)
+          lines (first (binding [cq/*attr-buckets* (cq/buckets-of d)]
+                         (cq/compile-body '[(ful ?a ?b)]
+                                          '[[(ful ?a ?b)
+                                             [?r :rel/from ?p] [?r :rel/kind :satisfier] [?r :rel/to ?a]
+                                             [?s :rel/from ?p] [?s :rel/kind :surface] [?s :rel/to ?b]]
+                                            [(ful ?a ?b)
+                                             [?r :rel/from ?a] [?r :rel/kind :fulfils] [?r :rel/to ?b]]]
+                                          (cq/vocab-index) '[?a ?b])))
+          satisfier (first (filter #(re-find #"satisfier" %) lines))]
+      (is satisfier "precondition: the union is emitted as rules, not inlined")
+      (is (re-find #":= \*t_int\[r, 'rel/to', a\]" satisfier)
+          (str "the clause binding the head var must lead; got: " satisfier)))))
+
+(deftest a-predicate-is-not-hoisted-by-the-head-var-orientation
+  (testing "orienting against the head vars must not treat them as BOUND: the caller's binding is
+            Cozo's business, and a predicate emitted ahead of what this body binds fails outright.
+            `a != b` mentions only head vars, so scoring alone would put it first."
+    (let [d     (db)
+          lines (first (binding [cq/*attr-buckets* (cq/buckets-of d)]
+                         (cq/compile-body '[(pairq ?a ?b)]
+                                          '[[(pairq ?a ?b) [?a :entity/name ?n] [?b :entity/name ?n] [(not= ?a ?b)]]
+                                            [(pairq ?a ?b) [?a :val/name ?n] [?b :val/name ?n] [(not= ?a ?b)]]]
+                                          (cq/vocab-index) '[?a ?b])))
+          rule  (first (filter #(re-find #"^r_pairq" %) lines))]
+      (is rule "precondition: the union is emitted as a rule")
+      (is (< (.indexOf ^String rule "entity/name") (.indexOf ^String rule "a != b"))
+          (str "the predicate must follow the clauses binding it; got: " rule)))))

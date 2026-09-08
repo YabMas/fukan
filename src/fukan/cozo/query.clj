@@ -477,22 +477,29 @@
    function call evaluated before its argument is bound fails outright (`starts_with(n, p)`
    ahead of what binds `p`: \"'starts_with' requires strings or bytes\"). A predicate is
    therefore held back until every var it mentions is bound, falling back to written order when
-   no such clause remains (a predicate over vars an OUTER clause binds later can only go last)."
-  [clauses bound]
-  (loop [pending (vec clauses), bound bound, out []]
-    (if (empty? pending)
-      out
-      (let [ready? (fn [i] (or (not (predicate-clause? (pending i)))
-                               (every? bound (vars-of (pending i)))))
-            score  (fn [i] (count (filter bound (vars-of (pending i)))))
-            idxs   (range (count pending))
-            usable (filterv ready? idxs)
-            pool   (if (seq usable) usable (vec idxs))
-            best   (reduce (fn [b i] (if (> (score i) (score b)) i b)) (first pool) (rest pool))
-            c      (pending best)]
-        (recur (into (subvec pending 0 best) (subvec pending (inc best)))
-               (into bound (vars-of c))
-               (conj out c))))))
+   no such clause remains (a predicate over vars an OUTER clause binds later can only go last).
+
+   `assumed` names vars to ORDER against without treating them as bound — the head vars of a rule
+   whose caller is expected to supply them. They pull the clauses that constrain them forward,
+   which is the whole point, but they must not license a predicate: the caller's binding is Cozo's
+   business, and a `starts_with` emitted ahead of what this body binds fails outright."
+  ([clauses bound] (order-expansion clauses bound #{}))
+  ([clauses bound assumed]
+   (loop [pending (vec clauses), bound bound, out []]
+     (if (empty? pending)
+       out
+       (let [ready? (fn [i] (or (not (predicate-clause? (pending i)))
+                                (every? bound (vars-of (pending i)))))
+             scored (into bound assumed)
+             score  (fn [i] (count (filter scored (vars-of (pending i)))))
+             idxs   (range (count pending))
+             usable (filterv ready? idxs)
+             pool   (if (seq usable) usable (vec idxs))
+             best   (reduce (fn [b i] (if (> (score i) (score b)) i b)) (first pool) (rest pool))
+             c      (pending best)]
+         (recur (into (subvec pending 0 best) (subvec pending (inc best)))
+                (into bound (vars-of c))
+                (conj out c)))))))
 
 (defn ^:private ^{:malli/schema [:=> [:cat :any :any] :any]}
   inline-clauses
@@ -516,11 +523,28 @@
   "A datalog rule `[(head args…) body…]` → `[def-lines refs]`: the head line, any not-join/
    or-join helpers, and any lifted-measure aux rules its body spawned (compiled recursively —
    nested measures fall out), plus the rule names its body calls (PURE). A head arg may be an
-   aggregate application `(agg ?v)` (see `chead`) — the rule is then a MEASURE."
+   aggregate application `(agg ?v)` (see `chead`) — the rule is then a MEASURE.
+
+   The body is ORIENTED AGAINST ITS OWN HEAD VARS — the same transform `inline-clauses` applies to
+   an expansion, for the same reason and with the other side of the call in mind. A rule that
+   survives to be emitted is one the compiler could not fold away, and Cozo evaluates such a call
+   under the caller's bindings; so the head args are what a call site can be expected to have
+   bound, and a body whose first clause ignores them opens with an unconstrained scan repeated per
+   binding. Measured on brian: the `fulfils` derivation, whose satisfier definition is authored
+   leading with a `[?r :rel/from _]` that binds neither head var, cost 175.4s as the second
+   definition of the namespace-dependency graph and 0.09s with the clause binding `?a` moved
+   first — the same 27 rows.
+
+   Orienting is the whole transform; HOISTING the call is not the answer and was measured to be
+   the opposite of one. Cozo restricts a rule call by the caller's bindings, so moving a call to
+   the front of its body removes the restriction: doing that globally took fukan's own 93 laws
+   from 0.87s to 236s."
   ([rule] (compile-rule rule nil))
   ([[head & body] inl]
-  (let [[body* aux]          (expand-measures (filter dvar? (rest head)) body)
+  (let [head-vars            (filter dvar? (rest head))
+        [body* aux]          (expand-measures head-vars body)
         body*                (cond-> body* inl (inline-clauses inl))
+        body*                (order-expansion body* #{} (set head-vars))
         [bodystr extra refs] (compile-clauses body*)
         [aux-lines aux-refs] (reduce (fn [[ls rs] r]
                                        (let [[l rf] (compile-rule (dewild r) inl)]

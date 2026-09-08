@@ -97,6 +97,17 @@ structure substrate **is** the model (no separate model-map).
   conformance law cost 27.1s against 4.1s left standing. `inline-index` refuses these; there is
   exactly one in the shipped vocabulary, and a consumer's `defrelation` could add another, which is
   the argument for stating the rule rather than the exception.
+  ⚠ AND WHAT TO DO WITH A RULE THAT CANNOT STOP BEING ONE: a multi-bodied head must materialize, so
+  **its own body is ORIENTED AGAINST ITS HEAD VARS** (`compile-rule`) — Cozo runs such a call under
+  the caller's bindings, so the head args are what a call site can be expected to have bound, and a
+  body opening on a clause that constrains neither of them opens on an unconstrained scan, repeated
+  per binding. Measured on brian: `fulfils`, authored leading with a `[?r :rel/from _]`, cost 175.4s
+  as the second definition of `ns-depends` and 0.09s with the clause binding its first head var
+  moved to the front — the same 27 rows. HOISTING the call instead is the opposite of a fix and was
+  measured to be: Cozo restricts a rule call by the caller's bindings, so moving calls to the front
+  of their bodies took fukan's own 93 laws from 0.87s to 236s. Orienting against head vars is for
+  SCORING only — head vars are not treated as bound, or a predicate over them would be emitted ahead
+  of what this body binds and hit the failure above;
   `cozo/law.clj` — compiles every defstructure law → CozoScript and registers the
   check-engine plug-point (so `structure/check` runs on Cozo); `cozo/build.clj` —
   the native model→CozoDB build; `cozo/{db,mirror,rules}.clj` — the db handle, datom
