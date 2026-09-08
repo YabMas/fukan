@@ -87,7 +87,16 @@ structure substrate **is** the model (no separate model-map).
   — measured), but NEVER a PREDICATE: a comparison or a registered predicate PORT compiles to an
   EXPRESSION, and a function call reached before its argument is bound can fail outright
   (`starts_with` on an unbound var), which `check` swallows into an UNDECIDABLE law. `order-expansion`
-  holds a predicate back until every var it mentions is bound;
+  holds a predicate back until every var it mentions is bound.
+  ⚠ WHEN NOT TO INLINE, one level up: **a rule whose body FILTERS on a var its head does not expose
+  is not a view — it is a GENERATOR with a selectivity, and it is paid once only if it materializes.**
+  A rule filtering only on head vars (`ns-depends`' `(not= ?a ?b)`) is a genuine view and folds for
+  free; one filtering on interior vars has a cross product that the filter cuts down, and inlining
+  lifts that product inside whatever join the call site sits in. Measured on brian, a Band's
+  `in-band` — 121 prefixes × 904 namespaces cut to 1,070 rows — inlined twice into the cross-band
+  conformance law cost 27.1s against 4.1s left standing. `inline-index` refuses these; there is
+  exactly one in the shipped vocabulary, and a consumer's `defrelation` could add another, which is
+  the argument for stating the rule rather than the exception.
   `cozo/law.clj` — compiles every defstructure law → CozoScript and registers the
   check-engine plug-point (so `structure/check` runs on Cozo); `cozo/build.clj` —
   the native model→CozoDB build; `cozo/{db,mirror,rules}.clj` — the db handle, datom

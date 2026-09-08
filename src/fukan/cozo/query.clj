@@ -286,6 +286,27 @@
               [(conj cs c) rules]))
           [[] []] clauses))
 
+;; ── clause shapes ────────────────────────────────────────────────────────────
+(defn- predicate-clause?
+  "True for a predicate clause — `[(= ?a ?b)]`, `[(starts-with? ?n ?p)]`: a one-element vector
+   wrapping a call. Distinguishes it from a datom clause `[?e :attr ?v]` and a rule call
+   `(rule ?a ?b)`, neither of which is order-sensitive here."
+  [c]
+  (and (vector? c) (= 1 (count c)) (seq? (first c))))
+
+(defn- plain-rule-call?
+  "A positive rule call — the only clause shape inlining touches. `not`/`not-join`/`or-join` are
+   left alone: `not (A, B)` is not `not A, B`, and the join helpers already compile to their own
+   rules. `is`/`measure` are handled by the clause compiler.
+
+   A call under a negation therefore stays a rule call. That is a statement about SOUNDNESS — the
+   expansion is not equivalent — and no longer doubles as the reason a filtered generator survives
+   inside a `not-join`: `inline-index` refuses those outright, so the two decisions agree instead
+   of one silently standing in for the other."
+  [c]
+  (and (seq? c) (symbol? (first c))
+       (not (#{'not 'not-join 'or-join 'is 'measure} (first c)))))
+
 (defn- compile-clause
   "One datalog clause → `[cozo-fragment extra-rules refs]` (PURE): `extra-rules` are the not-join/
    or-join helper definitions it spawns (uniquely named by content), `refs` the set of rule names it
@@ -384,27 +405,39 @@
     (seq? form)    (apply list (map #(subst-form % m) form))
     :else          form))
 
-(defn- plain-rule-call?
-  "A positive rule call — the only clause shape inlining touches. `not`/`not-join`/`or-join` are
-   left alone: `not (A, B)` is not `not A, B`, and the join helpers already compile to their own
-   rules. `is`/`measure` are handled by the clause compiler."
-  [c]
-  (and (seq? c) (symbol? (first c))
-       (not (#{'not 'not-join 'or-join 'is 'measure} (first c)))))
+(defn- filtered-generator?
+  "True when `body` FILTERS on a var its head does not expose — a rule that generates a cross
+   product and cuts it down. Only top-level predicates count: one inside a `not`/`not-join`
+   constrains that negation's own scope, not the rows the rule yields."
+  [params body]
+  (let [head (set params)]
+    (boolean (some #(and (predicate-clause? %) (not-every? head (vars-of %))) body))))
 
 (defn ^:private ^{:malli/schema [:=> [:cat :any] :any]}
   inline-index
   "The vocab rules that are INLINABLE — `rule-name → {:params :body}`. A rule qualifies when it
    has exactly ONE definition (a multi-bodied head is a union or a recursion, which must
-   materialize) and its head args are distinct plain vars (no aggregate heads). Purely a
-   datalog-level analysis of the rule forms, so it needs no compilation and can be built before
-   the compiled index."
+   materialize), its head args are distinct plain vars (no aggregate heads), and its body does not
+   FILTER on a var the head hides. Purely a datalog-level analysis of the rule forms, so it needs
+   no compilation and can be built before the compiled index.
+
+   ⚠ THAT LAST CLAUSE IS THE COMPANION TO THE INVARIANT ABOVE, one level up: that one says how to
+   compile an inlined rule, this says when not to inline one at all. A rule filtering only on head
+   vars is a genuine VIEW — folding it costs nothing, and the win the invariant measures is the
+   whole reason inlining exists. A rule filtering on INTERIOR vars is a generator with a
+   selectivity: its cross product is what the filter cuts down, and inlining lifts that product
+   inside whatever join the call site sits in, where it is paid once per row instead of once.
+   Measured on brian, a band's `in-band` — 121 prefixes × 904 namespaces cut to 1,070 rows —
+   inlined twice into a 3,273-edge namespace-dependency join cost 27.1s against 4.1s left as a
+   rule; ~85% of the law was the fold. It is untouched by any index, because the rows are computed
+   rather than stored."
   [rules]
   (into {} (for [[nm defs] (group-by #(rname (ffirst %)) rules)
                  :when (= 1 (count defs))
                  :let  [[head & body] (first defs)
                         args (vec (rest head))]
-                 :when (and (seq args) (every? dvar? args) (apply distinct? args))]
+                 :when (and (seq args) (every? dvar? args) (apply distinct? args)
+                            (not (filtered-generator? args body)))]
              [nm {:params args :body (vec body)}])))
 
 (defn- expand-call
@@ -429,13 +462,6 @@
                   (if-let [[cs n*] (expand-call c* idx (inc depth) n)]
                     (recur (vec more) (into out cs) n*)
                     (recur (vec more) (conj out c*) n)))))))))))
-
-(defn- predicate-clause?
-  "True for a predicate clause — `[(= ?a ?b)]`, `[(starts-with? ?n ?p)]`: a one-element vector
-   wrapping a call. Distinguishes it from a datom clause `[?e :attr ?v]` and a rule call
-   `(rule ?a ?b)`, neither of which is order-sensitive here."
-  [c]
-  (and (vector? c) (= 1 (count c)) (seq? (first c))))
 
 (defn- order-expansion
   "Order an expanded body so each clause runs as constrained as it can be: repeatedly take the

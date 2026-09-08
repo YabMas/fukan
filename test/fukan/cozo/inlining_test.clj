@@ -92,3 +92,40 @@
       (is (pos? pred) (str "the predicate should be emitted at all; got: " body))
       (is (< bind pred)
           (str "the clause binding ?v must precede the predicate reading it; got: " body)))))
+
+(deftest a-filtered-generator-is-not-inlined
+  (testing "a single-definition rule whose body filters on a var the head does NOT expose is a
+            GENERATOR with a selectivity, not a view: its cross product is what the filter cuts
+            down, and folding it lifts that product inside whatever join the call site sits in.
+            On brian a band's `in-band` — 121 prefixes × 904 namespaces cut to 1,070 rows —
+            inlined twice into a 3,273-edge join cost 27.1s against 4.1s left standing. The
+            ANSWER is identical either way, so this asserts the LOWERING."
+    (let [d    (db)
+          body (second (binding [cq/*attr-buckets* (cq/buckets-of d)]
+                         (cq/compile-body '[(gen ?a ?b)]
+                                          '[[(gen ?a ?b)
+                                             [?a :entity/name ?n]
+                                             [?b :val/name ?p]
+                                             [(clojure.string/starts-with? ?n ?p)]]]
+                                          (cq/vocab-index) '[?a ?b])))]
+      (is (re-find #"r_gen\[" body)
+          (str "the generator should be left as a rule call; got: " body))
+      (is (not (re-find #"starts_with" body))
+          (str "…so its filter should not appear in the calling body; got: " body)))))
+
+(deftest a-predicate-over-head-vars-only-still-inlines
+  (testing "the exclusion is about INTERIOR filtering, not about predicates. A rule filtering only
+            on vars its head exposes is a genuine view — the caller sees exactly the same rows —
+            and folding it is the win the whole transform exists for."
+    (let [d    (db)
+          body (second (binding [cq/*attr-buckets* (cq/buckets-of d)]
+                         (cq/compile-body '[(pairish ?a ?b)]
+                                          '[[(pairish ?a ?b)
+                                             [?a :entity/name ?n] [?b :entity/name ?n]
+                                             [(not= ?a ?b)]]]
+                                          (cq/vocab-index) '[?a ?b])))]
+      (is (not (re-find #"r_pairish\[" body))
+          (str "a head-var-only filter should still inline; got: " body))
+      (is (re-find #"t_str\[a, 'entity/name'" body)
+          (str "…to its datoms; got: " body)))))
+
