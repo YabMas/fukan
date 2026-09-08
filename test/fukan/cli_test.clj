@@ -53,3 +53,35 @@
                                                                      (toString [_]
                                                                        (throw (ex-info "unprintable" {}))))]})]
         (is (= 2 (:code (run-on db ["check"]))))))))
+
+;; ── which format pays for what ───────────────────────────────────────────────
+
+(defn- counting-findings
+  "`cli/findings` wrapped so a test can see whether the offender-naming pass ran at all. The
+   original is captured OUTSIDE the redef — deref'ing the var inside would call the wrapper."
+  [called]
+  (let [orig cli/findings]
+    (fn [& args] (swap! called inc) (apply orig args))))
+
+(deftest text-format-does-not-pay-to-name-offenders
+  (testing "`--format text` quotes each offender as its authored FORM and reads nothing `findings`
+            computes. Running it anyway was a discarded pass — 111s of a 900-namespace project's
+            run, naming 4,924 cells nobody printed."
+    (let [called (atom 0)
+          db     (build/vars->cozo [#'card-bad])]
+      (with-redefs [cli/findings (counting-findings called)]
+        (let [{:keys [code out]} (run-on db ["check" "--format" "text"])]
+          (is (= 1 code) "precondition: the law still fires")
+          (is (re-find #"Bad" out) "…and the offender is still on stdout, as its form")
+          (is (zero? @called) "the text report never names the offenders"))))))
+
+(deftest edn-format-does-pay-to-name-offenders
+  (testing "the other half of the branch: `--format edn` IS the named-offender report, so it must
+            still compute one"
+    (let [called (atom 0)
+          db     (build/vars->cozo [#'card-bad])]
+      (with-redefs [cli/findings (counting-findings called)]
+        (let [{:keys [code out]} (run-on db ["check"])]
+          (is (= 1 code))
+          (is (= 1 @called))
+          (is (re-find #"Bad" out) "the eid is resolved to a name a consumer can act on"))))))

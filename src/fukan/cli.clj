@@ -98,15 +98,23 @@
                                                      offenders)))))})
 
 (defn- check-verb
-  "Build the model under `spec-dirs` from `src` and check it, leaving the render to `render`."
-  [{:keys [src spec-dirs]}]
+  "Build the model under `spec-dirs` from `src` and check it, leaving the render to `render`.
+
+   Naming the offenders is the EDN report's OWN work, so the text format does not do it.
+   `--format text` quotes each offender as its authored form and reads nothing `findings`
+   computes; running it anyway was a wholly discarded pass — 111 seconds of a 900-namespace
+   project's run, naming 4,924 cells that were never printed. The two paths stay honest about
+   which one pays."
+  [{:keys [src spec-dirs format]}]
   ;; stdout is the REPORT; everything the build narrates (`load-model`'s summary line, an
   ;; extractor's warning) goes to stderr, or a consumer parsing stdout reads prose where it
   ;; expected data.
   (binding [canvas-source/*spec-dirs* spec-dirs, *out* *err*]
     (let [db         (infra-model/load-model src)
           violations (law/check db)]
-      (assoc (findings db violations) :db db :raw violations))))
+      (if (= :text format)
+        {:ok (empty? violations) :db db :raw violations}
+        (assoc (findings db violations) :db db :raw violations)))))
 
 (defn- describe-verb
   "Render the project's declared design. No code root: a declaration is what the project SAID,
