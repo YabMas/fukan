@@ -3,7 +3,7 @@
    compare against what was authored — the round-trip is the test (the sibling
    of the grammar print-dual's round-trip, one stratum down)."
   (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is]]
+            [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
@@ -137,3 +137,26 @@
     (is (str/includes? out "(INode ^{:name \"bad\"} offender")
         "the offender appears as its authored form, fix-adjacent")
     (is (= "No violations — every law holds." (inst/violations-text d* [])))))
+
+(deftest an-offender-cell-is-rendered-once-however-often-it-repeats
+  (testing "offender rows repeat their cells by CONSTRUCTION, not by accident: a law that binds an
+            edge names both of its endpoints' groupings in every row it produces, so on brian 627
+            rows × 4 cells resolved to 400 distinct nodes and each Band re-rendered an authored
+            form carrying up to 121 prefixes — 13.4s of pure repetition. The render is memoized for
+            the duration of one call, so the db reads must not grow with the repetition."
+    (let [d*     (db)
+          eid    (ffirst (cq/q '[:find ?e :where [?e :entity/name "bad"]] d*))
+          reads  (fn [rows]
+                   (let [n (atom 0), orig cq/entity]
+                     (with-redefs [cq/entity (fn [& a] (swap! n inc) (apply orig a))]
+                       (inst/violations-text d* [{:structure :x/T :law "l" :offenders rows}]))
+                     @n))
+          once   (reads [[eid]])
+          eight  (reads [[eid eid] [eid eid] [eid eid] [eid eid]])]
+      (is (pos? once) "precondition: rendering an offender reads the db")
+      (is (= once eight) "eight occurrences of one node cost one render")
+      (is (= 8 (count (re-seq #"\(INode \^\{:name \"bad\"\}"
+                              (inst/violations-text
+                               d* [{:structure :x/T :law "l"
+                                    :offenders [[eid eid] [eid eid] [eid eid] [eid eid]]}]))))
+          "…and the report still shows the form under every one of them"))))

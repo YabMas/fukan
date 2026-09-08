@@ -232,15 +232,21 @@
 (defn ^{:malli/schema [:=> [:cat :StructureDb [:vector :Violation]] :Text]}
   violations-text
   "`check` output rendered with each offender QUOTED as its authored form — the
-   law that fired and the instance that fired it, side by side."
+   law that fired and the instance that fired it, side by side.
+
+   The render is memoized for the duration of ONE call, because offender cells repeat by
+   construction rather than by accident: a law that binds an EDGE names both of its endpoints'
+   groupings in every row it produces, so brian's 627 rows × 4 cells resolve to 400 distinct
+   nodes, and each of its Bands re-renders an authored form carrying up to 121 prefixes. Scoped
+   to the call and not held: the db is rebuilt per run, and a cache that outlived one would
+   answer a REPL session out of the previous model."
   [db violations]
   (if (empty? violations)
     "No violations — every law holds."
-    (str/join "\n\n"
-              (for [{:keys [structure law offenders timed-out? message]} violations]
-                (if timed-out?
-                  (str "✗ " law "  [" (name structure) "]\n  " message)
+    (let [render (memoize #(offender-text db %))]
+      (str/join "\n\n"
+                (for [{:keys [structure law offenders]} violations]
                   (str "✗ " law "  [" (name structure) "]\n"
                        (str/join "\n"
                                  (for [row offenders x row]
-                                   (str/replace (offender-text db x) #"(?m)^" "  ")))))))))
+                                   (str/replace (render x) #"(?m)^" "  ")))))))))
