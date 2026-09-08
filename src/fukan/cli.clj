@@ -27,7 +27,13 @@
    `describe` takes no `--src` and that is the point: a declared design is what the project
    SAID, and extraction is what the code turned out to be. Skipping it is not an optimisation
    (though it is the difference between 40ms and 8s) — a design document that changed when the
-   code changed would not be a declaration.
+   code changed would not be a declaration. Handing it one is refused rather than ignored: which
+   flags a verb can consume is declared in `verb-flags`, and a flag with no reader is a question
+   the answer was never going to address.
+
+   That is also where `check` gets its refusal of `--select`. A scoped verdict is the failure the
+   three exit codes exist to prevent — a harness handed a green model for a region it never
+   checked — and it is not a special case, it is `check` having no reader for the flag.
 
    Three exit codes, because a consumer must distinguish two failures that look alike from
    the outside:
@@ -44,6 +50,7 @@
    never found one."
   (:require [clojure.edn :as edn]
             [clojure.pprint :as pp]
+            [clojure.string :as str]
             [fukan.canvas.ingestion.canvas-source :as canvas-source]
             [fukan.canvas.projection.design :as design]
             [fukan.canvas.projection.instance :as inst]
@@ -51,12 +58,33 @@
             [fukan.infra.model :as infra-model]
             [fukan.model.pipeline :as pipeline]))
 
+(def ^:private flag-spelling
+  "Every flag, keyword to the argv token — the one place a flag's name is written down, so a
+   refusal can name it back to the caller in the form they typed."
+  {:src "--src" :spec-dirs "--spec-dirs" :format "--format" :select "--select"})
+
+(def ^:private verb-flags
+  "What each verb can CONSUME. A flag outside its verb's set is refused, because a verb that
+   silently ignored one would answer a question nobody asked: `describe --src …` reads as a
+   declaration checked against that source root, and it is not — a declaration is what the
+   project SAID, and describe never opens the code."
+  {"describe" #{:spec-dirs :format :select}
+   "check"    #{:src :spec-dirs :format}})
+
+(def ^:private format-flags
+  "Flags the answer a `--format` names cannot consume, whatever its verb takes. The index
+   describes the WHOLE design however narrow the question that follows — an index of a selection
+   could not tell you what you had not already asked for — so a selection it silently widened
+   would be a promise it cannot keep."
+  {:index #{:select}})
+
 (defn- parse-args
-  "The flags, as a map. Unknown flags are an ERROR rather than a shrug: a harness that
-   misspells `--spec-dirs` would otherwise silently check the default directory and report a
-   clean model it never looked at."
+  "The flags GIVEN, as a map — no defaults, so a verb can tell a flag it was handed from one it
+   was not. Unknown flags are an ERROR rather than a shrug: a harness that misspells
+   `--spec-dirs` would otherwise silently check the default directory and report a clean model it
+   never looked at."
   [args]
-  (loop [args args, out {:src "src" :spec-dirs ["canvas"] :format :edn}]
+  (loop [args args, out {}]
     (if-let [[flag value & more] (seq args)]
       (case flag
         "--src"       (recur more (assoc out :src value))
@@ -65,6 +93,30 @@
         "--select"    (recur more (assoc out :select (edn/read-string value)))
         (throw (ex-info (str "unknown flag " flag) {:flag flag})))
       out)))
+
+(defn- unconsumable
+  "The message refusing the first flag `verb` cannot consume, or nil when every flag given has a
+   reader. Two ways to be unconsumable, and the caller cannot tell them apart from the outside:
+   the verb never takes the flag, or the answer its `--format` names has no use for it.
+
+   Presence is what counts, never the VALUE — `--select nil` reads as a request to scope and is
+   refused as one. Keying off truthiness let it through to a whole-model verdict, which is the
+   belief this refusal exists to prevent."
+  [verb opts]
+  (let [takes (verb-flags verb)
+        fmt   (:format opts)]
+    (or (when-let [k (first (remove takes (keys opts)))]
+          (str "`" (flag-spelling k) "` is not a flag `" verb "` takes"))
+        (when-let [k (first (filter (get format-flags fmt #{}) (keys opts)))]
+          (str "`" (flag-spelling k) "` is not a flag `--format " (name fmt) "` can consume")))))
+
+(defn- with-defaults
+  "The flags a verb reads, with what it was not given filled in. Defaults live HERE and not in the
+   parser because the parser's job is to record what the caller typed: a `--src` seeded before
+   anyone asked is indistinguishable from a `--src` the caller passed, and the refusal above
+   turns on exactly that difference."
+  [opts]
+  (merge {:src "src" :spec-dirs ["canvas"] :format :edn} opts))
 
 (defn- offender-name
   "Name one offender cell. An eid answers with its entity's name; a `^:value` node has none, so it
@@ -162,22 +214,19 @@
                  (:failed opts)
                  {:undecidable true :error (.getMessage ^Throwable (:failed opts))}
 
-                 (not (#{"check" "describe"} verb))
+                 (not (verb-flags verb))
                  {:undecidable true
-                  :error (str "unknown verb " (pr-str verb) " — expected `check` or `describe`")}
-
-                 ;; Same reasoning as an unknown flag: a harness that passed `--select` to `check`
-                 ;; and got a full check back would believe it had checked one region.
-                 (and (= "check" verb) (:select opts))
-                 {:undecidable true
-                  :error "`--select` is a describe flag — `check` decides the whole model"}
+                  :error (str "unknown verb " (pr-str verb) " — expected "
+                              (str/join " or " (map #(str "`" % "`") (sort (keys verb-flags)))))}
 
                  :else
-                 (try (render verb opts)
-                      (catch Throwable t
-                        {:undecidable true
-                         :error       (.getMessage t)
-                         :because     (mapv :law (:unsupported (ex-data t)))})))]
+                 (if-let [refusal (unconsumable verb opts)]
+                   {:undecidable true :error refusal}
+                   (try (render verb (with-defaults opts))
+                        (catch Throwable t
+                          {:undecidable true
+                           :error       (.getMessage t)
+                           :because     (mapv :law (:unsupported (ex-data t)))}))))]
     (if (:undecidable result)
       {:code 2 :error (:error result) :out (with-out-str (pp/pprint result))}
       {:code (if (:ok result) 0 1) :out (:out result)})))

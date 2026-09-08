@@ -85,3 +85,41 @@
           (is (= 1 code))
           (is (= 1 @called))
           (is (re-find #"Bad" out) "the eid is resolved to a name a consumer can act on"))))))
+
+;; ── which flags a verb can consume ───────────────────────────────────────────
+
+(deftest a-flag-a-verb-does-not-take-is-refused
+  (testing "`describe --src` was accepted and ignored, which reads as a declaration checked against
+            that source root. A declaration is what the project SAID and describe never opens the
+            code, so the flag has no reader and the invocation is refused."
+    (let [{:keys [code error]} (#'cli/run ["describe" "--src" "somewhere"])]
+      (is (= 2 code))
+      (is (= "`--src` is not a flag `describe` takes" error)
+          "and the message names the flag in the form the caller typed it"))))
+
+(deftest a-scoped-verdict-is-refused-whatever-the-selection-reads-as
+  (testing "the refusal turns on the flag being PRESENT, not on its value. `--select nil` is a
+            request to scope, and keying off truthiness handed it a whole-model verdict — the
+            belief the three exit codes exist to prevent."
+    (doseq [v ["nil" "[(Module ?n)]"]]
+      (let [{:keys [code error]} (#'cli/run ["check" "--select" v])]
+        (is (= 2 code) (str "check --select " v))
+        (is (= "`--select` is not a flag `check` takes" error))))))
+
+(deftest a-format-refuses-what-its-answer-cannot-consume
+  (testing "the index describes the WHOLE design however narrow the question that follows, so a
+            selection it silently widened would be a promise it cannot keep"
+    (let [{:keys [code error]} (#'cli/run ["describe" "--format" "index" "--select" "[(Module ?n)]"])]
+      (is (= 2 code))
+      (is (= "`--select` is not a flag `--format index` can consume" error)))))
+
+(deftest an-unknown-verb-names-the-verbs-there-are
+  (let [{:keys [code error]} (#'cli/run ["frobnicate"])]
+    (is (= 2 code))
+    (is (re-find #"`check` or `describe`" error))))
+
+(deftest a-flag-a-verb-does-take-still-reaches-the-verb
+  (testing "the table refuses; it does not narrow what a legal invocation gets. A check with the
+            flags check reads still decides the whole model."
+    (let [db (build/vars->cozo [#'card-bad])]
+      (is (= 1 (:code (run-on db ["check" "--src" "src" "--format" "text"])))))))
