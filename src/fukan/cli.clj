@@ -34,10 +34,14 @@
 
      0  satisfied — every law holds
      1  UNSATISFIED — laws fired, and the offenders are on stdout
-     2  UNDECIDABLE — a law would not compile, the specs would not load, extraction blew up.
-        Fukan is fail-closed about this (`law/check` throws rather than returning a green
-        list), and so is this: a harness that read 2 as 0 would wave through exactly the
-        branch that broke the checker."
+     2  UNDECIDABLE — a law would not compile, the specs would not load, extraction blew up,
+        the report would not render. Fukan is fail-closed about this (`law/check` throws
+        rather than returning a green list), and so is this: a harness that read 2 as 0 would
+        wave through exactly the branch that broke the checker.
+
+   That last case is why the render sits inside `run` and not in `-main`: a throw on the way
+   out escapes to the JVM, whose own exit code is 1 — a violation announced by a checker that
+   never found one."
   (:require [clojure.edn :as edn]
             [clojure.pprint :as pp]
             [fukan.canvas.ingestion.canvas-source :as canvas-source]
@@ -94,8 +98,7 @@
                                                      offenders)))))})
 
 (defn- check-verb
-  "Build the model under `spec-dirs` from `src` and check it — the whole fallible half, so
-   `-main` is left with nothing but rendering and an exit code."
+  "Build the model under `spec-dirs` from `src` and check it, leaving the render to `render`."
   [{:keys [src spec-dirs]}]
   ;; stdout is the REPORT; everything the build narrates (`load-model`'s summary line, an
   ;; extractor's warning) goes to stderr, or a consumer parsing stdout reads prose where it
@@ -119,9 +122,32 @@
                (design/design-index db)
                (design/design-text db (if (= :forms format) :forms :prose) select))})))
 
-(defn ^{:malli/schema [:=> [:cat [:sequential :string]] :nil]}
-  -main
-  [& args]
+(defn- render
+  "The verb's answer as the exact text to put on stdout, and whether the model holds:
+   `{:ok :out}`. `:out` carries its own trailing newline.
+
+   Under `run`'s `try` for the reason the ns docstring gives. What makes that a live risk rather
+   than a theoretical one: naming an offender and quoting its authored form are reads over the
+   model db, and they run for the FIRST time exactly when a check first goes red — so a project
+   adopting laws meets this path at the moment it most needs the verdict to be true."
+  [verb {:keys [format] :as opts}]
+  (if (= "describe" verb)
+    {:ok true :out (str (:text (describe-verb opts)) "\n")}
+    (let [{:keys [ok db raw] :as result} (check-verb opts)]
+      {:ok  ok
+       :out (if (= :text format)
+              (str (inst/violations-text db raw) "\n")
+              ;; rendered to a string rather than streamed, so a report that fails half-way
+              ;; leaves stdout clean instead of a truncated one under an exit 2
+              (with-out-str (pp/pprint (dissoc result :db :raw))))})))
+
+(defn- run
+  "One invocation, decided but not yet printed: `{:code :out :error}`.
+
+   Everything fallible lives here — parsing, the build, the check, and the render — so that
+   every way this can fail lands on the same answer, and `-main` is left with a string, a
+   stream, and an exit code."
+  [args]
   (let [[verb & flags] args
         opts   (try (parse-args flags) (catch Throwable t {:failed t}))
         result (cond
@@ -139,25 +165,25 @@
                   :error "`--select` is a describe flag — `check` decides the whole model"}
 
                  :else
-                 (try (if (= "describe" verb) (describe-verb opts) (check-verb opts))
+                 (try (render verb opts)
                       (catch Throwable t
                         {:undecidable true
                          :error       (.getMessage t)
-                         :because     (mapv :law (:unsupported (ex-data t)))})))
-        report (dissoc result :db :raw :text)]
-    (cond
-      (:undecidable result)
-      (do (binding [*out* *err*] (println "fukan UNDECIDABLE:" (:error result)))
-          (pp/pprint report)
-          (System/exit 2))
+                         :because     (mapv :law (:unsupported (ex-data t)))})))]
+    (if (:undecidable result)
+      {:code 2 :error (:error result) :out (with-out-str (pp/pprint result))}
+      {:code (if (:ok result) 0 1) :out (:out result)})))
 
-      (:text result)
-      (do (println (:text result)) (System/exit 0))
-
-      (= :text (:format opts))
-      (do (println (inst/violations-text (:db result) (:raw result)))
-          (System/exit (if (:ok result) 0 1)))
-
-      :else
-      (do (pp/pprint report)
-          (System/exit (if (:ok result) 0 1))))))
+(defn ^{:malli/schema [:=> [:cat [:sequential :string]] :nil]}
+  -main
+  [& args]
+  (let [{:keys [code out error]} (run args)]
+    ;; the sentence goes to stderr and the report to stdout: a consumer parsing stdout must find
+    ;; data there whatever happened, and a human wants the reason without reading edn for it
+    (when error (binding [*out* *err*] (println "fukan UNDECIDABLE:" error)))
+    (print out)
+    ;; `print` does not flush the way `println` does, and `System/exit` skips the flush
+    ;; `clojure.main` performs on the way out — an unflushed report is a verdict with no
+    ;; evidence under it
+    (flush)
+    (System/exit code)))
