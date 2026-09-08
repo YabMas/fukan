@@ -144,4 +144,5 @@
    fukan.cozo.entity-test/EThing hooks.fukan.structure/instance
    fukan.cozo.measure-test/MtCrate hooks.fukan.structure/instance
    fukan.cozo.measure-test/MtThing hooks.fukan.structure/instance
+   fukan.cozo.vocab-index-test/VIThing hooks.fukan.structure/instance
    fukan.model.pipeline-test/ECard hooks.fukan.structure/instance}}}

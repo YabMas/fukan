@@ -145,6 +145,11 @@
    the index). Vocab-contributed via `register-predicate-port!` — the kernel seeds none."
   (atom {}))
 
+(def ^:private port-generation
+  "Bumped by every predicate-port registration — the engine's half of the key `vocab-index` caches
+   under (the kernel's half is `structure/vocabulary-generation`)."
+  (atom 0))
+
 (def ^:private predicate-registry
   "Clojure fn-predicate symbol → a builder `(arg-terms) → [cozo-fragment refs]`. Seeded with GENERIC
    ports only; vocab registers domain predicates via `register-predicate-port!`.
@@ -161,6 +166,9 @@
   [sym builder synthetic]
   (swap! predicate-registry assoc sym builder)
   (swap! synthetic-rules merge synthetic)
+  ;; the compiled index is seeded from `synthetic-rules`, so a port arriving after one was built
+  ;; must retire it — the engine's own half of the vocabulary generation
+  (swap! port-generation inc)
   nil)
 
 ;; ── name-match: a configured predicate for ordinary Datalog carriers ──────────
@@ -555,11 +563,9 @@
      (into refs aux-refs)])))
 
 ;; ── the vocab-rule index + reachability closure ───────────────────────────────
-(defn ^{:malli/schema [:=> [:cat] :any]}
-  vocab-index
-  "Compile `structure/vocab-rules` (the always-injected vocab rules) once into an index
-   `rule-name → {:lines [cozo-defs] :refs #{names it calls}}`, merging a rule's multiple
-   definitions. Uncompilable rules are skipped. The synthetic rules are merged in as seed."
+(defn- compile-vocab-index
+  "The compile `vocab-index` caches — `structure/vocab-rules` folded into
+   `rule-name → {:lines :refs}`."
   []
   (let [rules (structure/vocab-rules)
         inl   (inline-index rules)]
@@ -578,6 +584,32 @@
         ;; MERGED set, which is the only way to tell a caller's redefinition from the same rule
         ;; simply being passed through again.
         (assoc ::inline inl ::rules rules))))
+
+(def ^:private vocab-index-cache
+  "The last compiled index, with what it was compiled FROM: the vocabulary generation, and the
+   attr→bucket map in force (compared by `identical?` — `buckets-of` already hands out one map per
+   db). Both belong in the key: the rules come from the vocabulary, and the stored relation each
+   clause reads comes from the db."
+  (atom nil))
+
+(defn ^{:malli/schema [:=> [:cat] :any]}
+  vocab-index
+  "The compiled index of the always-injected vocab rules — `rule-name → {:lines [cozo-defs]
+   :refs #{names it calls}}`, a rule's multiple definitions merged, uncompilable rules skipped,
+   the synthetic predicate-port rules seeded in.
+
+   MEMOIZED against the vocabulary generation and the bucket index, because neither moves between
+   queries on a held model while this compiles the whole rule set on every call — 86% of a trivial
+   query's cost went here. Registering a structure, a correspondence or a predicate port bumps the
+   generation, and a rebuilt db hands out a new bucket map, so a stale index cannot be served."
+  []
+  (let [gen [(structure/vocabulary-generation) @port-generation]
+        c   @vocab-index-cache]
+    (if (and c (= gen (:gen c)) (identical? *attr-buckets* (:buckets c)))
+      (:index c)
+      (let [idx (compile-vocab-index)]
+        (reset! vocab-index-cache {:gen gen :buckets *attr-buckets* :index idx})
+        idx))))
 
 (defn- closure
   "The set of vocab-rule names reachable from `seeds` through the index's `:refs`."

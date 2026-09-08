@@ -22,6 +22,12 @@
    :performs  [:throws :state]})             ; reads registries; rejects closed-head contributors
 ;; `check` (+ its readers `violations-of`/`violation-names`) is EVALUATION — it lives in the engine
 ;; (`cozo-law`), not here. The kernel DEFINES laws (`laws-of`/`all-structures`); the engine evaluates.
+(Operation vocabulary-generation
+  "The counter every registration that can change `vocab-rules` bumps — the cache key under which
+   an engine may hold a COMPILED rule index. Equal generations mean the same vocabulary; it says
+   nothing about the MODEL, which changes without touching a registry."
+  {:signature [:=> [:cat] :int]
+   :performs  [:state]})                     ; reads the registration counter
 (Operation structure-by-tag
   "Look up a registered structure definition (slots + laws) by its tag."
   {:signature [:=> [:catn [:tag :keyword]] :any]})
@@ -66,7 +72,7 @@
   {:signature [:=> [:catn [:sym :any]] :string]})
 (Module core-structure
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
-  {:child [vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
+  {:child [vocab-rules vocabulary-generation structure-by-tag value-literal->iv scalar-slot? all-structures
            all-corresponds correspond-by-pair
            laws-of pin-clause rule-name
            Violation Form                         ; check-output SHAPE (cozo-law produces it) + the print-dual code-form (projections produce it)

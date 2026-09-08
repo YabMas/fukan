@@ -99,10 +99,15 @@
   "Run every law over the Cozo db `cdb`, returning `[{:structure :law :offenders}]` (offenders
    = matched eid tuples, native handles) for laws that fire, and `{:structure :law :unsupported true}`
    for laws whose form (or a vocab rule they read) isn't compiled yet. A type-check law runs
-   the hybrid (`value-offenders`); everything else compiles to CozoScript and runs."
+   the hybrid (`value-offenders`); everything else compiles to CozoScript and runs.
+
+   The vocab index is compiled INSIDE the bucket binding, with the same map every law then
+   compiles against: a rule compiled with no bucket index in force reads a three-way union helper
+   for every attribute instead of the one stored relation that holds it — and the index compiled
+   outside would also miss the memo the laws go on to hit."
   [cdb]
-  (let [index   (query/vocab-index)
-        buckets (query/buckets-of cdb)]
+  (let [buckets (query/buckets-of cdb)
+        index   (binding [query/*attr-buckets* buckets] (query/vocab-index))]
     (vec (for [[tag law] (all-laws)]
            (cond
              (value-check-law law)

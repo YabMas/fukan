@@ -45,6 +45,22 @@
 
 (defonce ^:private structures (atom {}))
 
+;; ── the vocabulary generation ────────────────────────────────────────────────
+;; `vocab-rules` is a pure function of the two registries below, and an engine that compiles it
+;; needs a cheap way to ask whether its compiled form is still current. Comparing the rule set
+;; itself would cost as much as re-deriving it, so registration stamps a counter instead.
+
+(defonce ^:private generation (atom 0))
+
+(defn ^{:malli/schema [:=> [:cat] :int]}
+  vocabulary-generation
+  "A counter bumped by every registration that can change `vocab-rules` — the cache key under
+   which an engine may hold a COMPILED rule index. Equal generations mean the same vocabulary, so
+   the compiled form still answers; it says nothing about the MODEL, which changes without
+   touching a registry."
+  []
+  @generation)
+
 (defn ^:export register-structure!
   "Register `sdef` under its tag. A structure's tag is QUALIFIED (identity = defining ns + name),
    so structures sharing a short name coexist. A RELATION element's tag is UNQUALIFIED — its
@@ -62,6 +78,7 @@
                              (:ns sdef) " would silently shadow it. Rename one of the two.")
                         {:tag (:tag sdef) :declared-by (:ns prior) :redeclared-by (:ns sdef)})))))
   (swap! structures assoc (:tag sdef) sdef)
+  (swap! generation inc)
   (:tag sdef))
 (defn ^{:malli/schema [:=> [:cat] [:vector :any]]}
   all-structures [] (vals @structures))
@@ -1035,6 +1052,7 @@
         (throw (ex-info (str "correspondence " k " is already declared by " (:ns prior))
                         {:pair k :declared-by (:ns prior) :redeclared-by ns}))))
     (swap! corresponds-registry assoc k config)
+    (swap! generation inc)
     k))
 
 (defn ^{:malli/schema [:=> [:catn [:pair :any]] :any]}
