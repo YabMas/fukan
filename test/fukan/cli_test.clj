@@ -8,10 +8,10 @@
             [fukan.canvas.projection.instance :as inst]
             [fukan.cli :as cli]
             [fukan.cozo.build :as build]
+            ;; also loaded for its side-effect: registering the Cozo check engine, so `law/check`
+            ;; dispatches
             [fukan.cozo.law :as law]
             [fukan.cozo.query :as cq]
-            ;; loaded for its side-effect: registers the Cozo check engine so `law/check` dispatches
-            [fukan.cozo.law]
             [fukan.infra.model :as infra-model]))
 
 (defstructure Card "Test fixture: a structure whose refined slot gives us a law that fires."
@@ -173,3 +173,75 @@
     (let [db  (build/vars->cozo [#'card-bad #'card-worse])
           ord (mapv (juxt (comp str :structure) :law) (law/check db))]
       (is (= ord (sort ord))))))
+
+;; ── report: measures, never decides ──────────────────────────────────────────
+
+(defn- eid-of
+  "The eid of the offender named `nm` in `violations` — what a selection would have to contain
+   for that row to count as in scope."
+  [db violations nm]
+  (first (for [v violations, row (:offenders v), x row
+               :when (and (int? x) (= nm (law/offender-label db x)))]
+           x)))
+
+(deftest a-report-counts-without-gating
+  (testing "a project mid-migration runs this in CI to print the number, not to fail the build.
+            Exit 1 would make it a gate, which is what `check` is for."
+    (let [db (build/vars->cozo [#'card-bad #'card-worse])
+          {:keys [code out]} (run-on db ["report"])]
+      (is (= 0 code) "violations counted, and still exit 0")
+      (is (re-find #"2 violations in the whole model" out)))))
+
+(deftest an-undecidable-law-stops-a-report-whatever-the-scope
+  (testing "an unevaluated law's offenders cannot be known to fall outside a scope, so a scoped
+            report is no more decidable than an unscoped one"
+    (with-redefs [law/check (fn [& _] (throw (ex-info "nope" {:unsupported [{:law "a law"}]})))]
+      (doseq [args [["report"] ["report" "--select" "[(Module ?n)]"]]]
+        (is (= 2 (:code (run-on (build/vars->cozo [#'card-good]) args)))
+            (str args))))))
+
+(deftest the-three-scope-counts-sum-to-the-whole
+  (testing "totality is the property that lets a zero be read as a zero. A partition that dropped
+            what it could not adjudicate would be a scoped verdict wearing a report's clothes."
+    (let [db  (build/vars->cozo [#'card-bad #'card-worse])
+          raw (law/check db)]
+      (doseq [focus [nil #{} #{(eid-of db raw "Bad")} #{-1}]]
+        (let [{:keys [counts laws]} (cli/tally raw focus)]
+          (is (= (:total counts) (+ (:in counts) (:out counts) (:unadjudicable counts)))
+              (str "focus " (pr-str focus)))
+          (doseq [l laws]
+            (is (= (:total l) (+ (:in l) (:out l) (:unadjudicable l)))
+                (str "per-law, focus " (pr-str focus)))))))))
+
+(deftest a-selection-narrows-the-count-and-nothing-else
+  (let [db  (build/vars->cozo [#'card-bad #'card-worse])
+        raw (law/check db)
+        bad (eid-of db raw "Bad")]
+    (is (= {:in 2 :out 0 :unadjudicable 0 :total 2} (:counts (cli/tally raw nil)))
+        "no selection is the whole model, not an empty one")
+    (is (= {:in 1 :out 1 :unadjudicable 0 :total 2} (:counts (cli/tally raw #{bad})))
+        "and a selection moves rows between buckets without changing the total")))
+
+(deftest a-row-no-selection-can-adjudicate-is-counted-as-such
+  (testing "a law may bind a VALUE as its offender — an unresolvable type-reference reports the
+            name it could not resolve, because the Schema carrying it has no eid anyone can act
+            on. No node-selection can claim or disclaim such a row."
+    (let [raw [{:structure :S :law "l" :offenders [["a-bare-name"] [7]]}]]
+      (is (= {:in 0 :out 1 :unadjudicable 1 :total 2} (:counts (cli/tally raw #{})))
+          "the value row is unadjudicable; the node row is merely out")
+      (is (= {:in 2 :out 0 :unadjudicable 0 :total 2} (:counts (cli/tally raw nil)))
+          "with no selection there is nothing to adjudicate against, so both are simply in"))))
+
+(deftest report-names-offenders-only-for-the-rows-it-prints
+  (testing "the naming pass is proportional to what is printed, not to the model — the same claim
+            `--format text` already makes for check"
+    (let [called (atom 0)
+          db     (build/vars->cozo [#'card-bad #'card-worse])]
+      (with-redefs [cli/findings (counting-findings called)]
+        (is (= 0 (:code (run-on db ["report"]))) "the default format prints no offenders")
+        (is (zero? @called) "…so it never names one")))))
+
+(deftest report-refuses-nothing-check-refuses-and-check-still-refuses-it
+  (testing "you may scope a report; you may not scope a verdict"
+    (is (= 0 (:code (run-on (build/vars->cozo [#'card-bad]) ["report" "--select" "[(Module ?n)]"]))))
+    (is (= 2 (:code (#'cli/run ["check" "--select" "[(Module ?n)]"]))))))
