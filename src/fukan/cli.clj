@@ -146,8 +146,13 @@
                       (cond-> {:structure structure :law law}
                         key  (assoc :key key)
                         vars (assoc :vars (mapv str vars))
-                        true (assoc :offenders (mapv #(mapv (partial offender-name db) %)
-                                                     offenders)))))})
+                        ;; sorted by what is PRINTED, not by eid: Cozo returns rows in engine
+                        ;; order and an eid does not survive a rebuild, so neither could carry a
+                        ;; reader from one run's report to the next
+                        true (assoc :offenders (->> offenders
+                                                    (mapv #(mapv (partial offender-name db) %))
+                                                    (sort-by vec)
+                                                    vec)))))})
 
 (defn- check-verb
   "Build the model under `spec-dirs` from `src` and check it, leaving the render to `render`.

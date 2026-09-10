@@ -247,6 +247,11 @@
       (str/join "\n\n"
                 (for [{:keys [structure law offenders]} violations]
                   (str "✗ " law "  [" (name structure) "]\n"
+                       ;; rows sort by the text they render to — this format's answer to the same
+                       ;; question the edn report answers by sorting on names: what is printed is
+                       ;; what orders it, so two runs over one model print the same bytes
                        (str/join "\n"
-                                 (for [row offenders x row]
-                                   (str/replace (render x) #"(?m)^" "  ")))))))))
+                                 (sort (for [row offenders]
+                                         (str/join "\n"
+                                                   (for [x row]
+                                                     (str/replace (render x) #"(?m)^" "  "))))))))))))

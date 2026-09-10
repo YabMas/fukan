@@ -189,8 +189,13 @@
                              (str " — " (count over) " over the " *law-budget-ms*
                                   "ms per-law budget")))
                       {:unsupported undecided})))
-    (vec (for [r results :when (:offenders r)]
-           (select-keys r [:structure :law :key :vars :offenders])))))
+    ;; sorted by (structure, description) — the pair that identifies a law across runs, since
+    ;; `:key` is optional and most laws carry none. Registry order is an accident of how the
+    ;; namespaces happened to load, and a reader diffing two runs would read it as news.
+    (->> (for [r results :when (:offenders r)]
+           (select-keys r [:structure :law :key :vars :offenders]))
+         (sort-by (juxt (comp str :structure) :law))
+         vec)))
 
 (defn- known-law-keys
   "Every `:key` across the laws `check` runs — the addressable worklist surface, from the
@@ -239,7 +244,12 @@
    every cell as an eid turned that into a Cozo error against a name used as an entity id."
   [cdb x]
   (if (int? x)
-    (or (:entity/name (query/entity cdb x)) (str x))
+    (let [e (query/entity cdb x)]
+      ;; `:entity/id` and not the eid. An eid is minted by the build that produced this db, so a
+      ;; label falling back to it names the same node differently on every run — and a report
+      ;; nobody can diff across runs cannot be counted down. `:entity/id` is the natural key the
+      ;; assembler resolved the node by, so it survives a rebuild.
+      (or (:entity/name e) (:entity/id e) (str x)))
     (str x)))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] [:set [:vector :any]]]}

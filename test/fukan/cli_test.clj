@@ -8,6 +8,8 @@
             [fukan.canvas.projection.instance :as inst]
             [fukan.cli :as cli]
             [fukan.cozo.build :as build]
+            [fukan.cozo.law :as law]
+            [fukan.cozo.query :as cq]
             ;; loaded for its side-effect: registers the Cozo check engine so `law/check` dispatches
             [fukan.cozo.law]
             [fukan.infra.model :as infra-model]))
@@ -16,7 +18,8 @@
   {:card [:enum "one" "many"]})
 
 (Card ^{:name "Bad"}  card-bad  {:card "lots"})
-(Card ^{:name "Good"} card-good {:card "one"})
+(Card ^{:name "Good"}  card-good  {:card "one"})
+(Card ^{:name "Worse"} card-worse {:card "heaps"})
 
 (defn- run-on
   "`run` over a canned model. `load-model` is the only thing stubbed — the check, the offender
@@ -123,3 +126,50 @@
             flags check reads still decides the whole model."
     (let [db (build/vars->cozo [#'card-bad])]
       (is (= 1 (:code (run-on db ["check" "--src" "src" "--format" "text"])))))))
+
+;; ── the report is a function of the model, not of iteration order ────────────
+
+(deftest an-unnameable-offender-is-named-by-a-key-that-survives-a-rebuild
+  (testing "the label used to fall back to the eid, which the build that produced the db minted.
+            Two builds of one model named the same node differently, so no report could be diffed
+            against the previous run's."
+    (let [db  (build/vars->cozo [#'card-bad])
+          eid (ffirst (mapcat :offenders (law/check db)))]
+      (is (some? eid) "precondition: the fixture law fired")
+      (is (= "Bad" (law/offender-label db eid))
+          "a named node still answers with its name")
+      (is (some? (:entity/id (cq/entity db eid)))
+          "and the key it would fall back to is one the assembler resolved it by, not the eid"))))
+
+(deftest two-runs-over-one-model-print-the-same-bytes
+  (testing "a diff of two reports IS the count delta only if nothing else moves between them.
+            Cozo returns rows in engine order and the law registry in load order — neither is
+            news, and a reader diffing two runs would read both as news."
+    (doseq [fmt ["edn" "text"]]
+      (let [out #(:out (run-on (build/vars->cozo [#'card-bad #'card-worse]) ["check" "--format" fmt]))]
+        (is (= (out) (out)) (str "--format " fmt " is stable across runs"))))))
+
+(defn- reversed-rows
+  "`check` output with every offender row list reversed — a stand-in for the engine handing the
+   same rows back in a different order, which is the thing the sort exists to absorb. The fixture
+   alone cannot show it: two builds of one model assign eids the same way, so a report can look
+   stable across runs while still being ordered by the engine."
+  [violations]
+  (mapv #(update % :offenders (comp vec reverse)) violations))
+
+(deftest row-order-out-says-nothing-about-row-order-in
+  (let [db  (build/vars->cozo [#'card-bad #'card-worse])
+        raw (law/check db)]
+    (is (< 1 (count (mapcat :offenders raw))) "precondition: more than one row to order")
+    (testing "the edn report sorts on the names it prints"
+      (is (= (cli/findings db raw) (cli/findings db (reversed-rows raw)))))
+    (testing "the text report sorts on the forms it prints"
+      (is (= (inst/violations-text db raw)
+             (inst/violations-text db (reversed-rows raw)))))))
+
+(deftest laws-are-ordered-by-the-pair-that-identifies-them
+  (testing "`:key` is optional and most laws carry none, so the identifier across runs is the
+            (structure, description) pair — and that is what orders the report"
+    (let [db  (build/vars->cozo [#'card-bad #'card-worse])
+          ord (mapv (juxt (comp str :structure) :law) (law/check db))]
+      (is (= ord (sort ord))))))
