@@ -5,11 +5,12 @@
    — an agent harness composing a briefing, a landing gate, a review stage — and every one of
    them would otherwise reach past this into `law/check` and re-derive what fukan already says.
 
-   Three verbs, because a reader arrives with three different questions:
+   Four verbs, because a reader arrives with four different questions:
 
      describe   what has this project DECLARED?    — the design, as its authored forms
      check      does the code still OBEY it?       — the violations, as data
      report     how far from obeying is this part? — the counts, and never a verdict
+     elements   what are the declared things?      — each one as data, with its code twin
 
    Usage:
      clojure -M:fukan -m fukan.cli describe [--spec-dirs canvas] [--format index|prose|forms]
@@ -17,6 +18,13 @@
      clojure -M:fukan -m fukan.cli check --src src [--spec-dirs canvas] [--format edn|text]
      clojure -M:fukan -m fukan.cli report --src src [--spec-dirs canvas]
                                           [--format count|edn|text] [--select '[(Band ?n)]']
+     clojure -M:fukan -m fukan.cli elements --src src [--spec-dirs canvas] [--select '[(Module ?n)]']
+
+   `elements` is the one answer shaped for a program to JOIN on rather than to read: every authored
+   element with its sort, a digest of its declaration, and — for one whose module pairs with code —
+   the namespace and source file it pairs with. A consumer holding its own records about those
+   elements resolves them against this, and learns that one moved when its digest or its file
+   does, without parsing a model. It is not a verdict and never answers 1.
 
    `check` and `report` ask the same question of the same whole-model check and do opposite things
    with the answer, and the split is the point. You may scope a report; you may not scope a
@@ -76,8 +84,10 @@
             [fukan.canvas.ingestion.canvas-source :as canvas-source]
             [fukan.canvas.projection.design :as design]
             [fukan.canvas.core.lens :as lens]
+            [fukan.canvas.core.structure :as s]
             [fukan.canvas.projection.instance :as inst]
             [fukan.cozo.law :as law]
+            [fukan.cozo.query :as cq]
             [fukan.infra.model :as infra-model]
             [fukan.model.pipeline :as pipeline]))
 
@@ -93,7 +103,9 @@
    project SAID, and describe never opens the code."
   {"describe" #{:spec-dirs :format :select}
    "check"    #{:src :spec-dirs :format}
-   "report"   #{:src :spec-dirs :format :select}})
+   "report"   #{:src :spec-dirs :format :select}
+   ;; one answer, as data, so there is no format to choose
+   "elements" #{:src :spec-dirs :select}})
 
 (def ^:private format-flags
   "Flags the answer a `--format` names cannot consume, whatever its verb takes. The index
@@ -300,6 +312,104 @@
                (design/design-index db)
                (design/design-text db (if (= :forms format) :forms :prose) select))})))
 
+(defn- sha256-hex
+  "The SHA-256 of `s`, as lowercase hex."
+  [^String s]
+  (let [bs (.digest (java.security.MessageDigest/getInstance "SHA-256") (.getBytes s "UTF-8"))]
+    (apply str (map #(format "%02x" %) bs))))
+
+(defn- sort-of
+  "A `:structure/of` cell as the keyword it names — Cozo hands the tag back as a string."
+  [t]
+  (keyword (str/replace (str t) #"^:" "")))
+
+(defn- source-file
+  "The file under `src` that the namespace `ns-name` is read from, or nil when no such file exists.
+   Never a path that is not there: a consumer reads this file, and a guessed one reads nothing."
+  [src ns-name]
+  (let [base (str src "/" (-> ns-name (str/replace "-" "_") (str/replace "." "/")))]
+    (some #(let [f (str base %)] (when (.isFile (java.io.File. f)) f)) [".clj" ".cljc" ".cljs"])))
+
+(defn ^{:malli/schema [:=> [:cat :any :map] :any]}
+  element-rows
+  "Every AUTHORED element in `db` as a row a consumer joins on: `:id`, `:name`, `:sort`, a
+   `:declaration` digest, its docstring as `:doc` when it has one, `:refs` naming what its relation
+   slots point at, and — where its module pairs with code — `:ns` and `:file`. `opts` carries the
+   source root `:src` and an optional `:focus` node-set narrowing the rows.
+
+   `:refs` maps each relation slot to the sorted `:id`s of the declared elements it names, so what
+   an element is about can be read without reading its form. A slot holding an anonymous value — a
+   signature's type — or an extracted fact names no element and is left out, which makes every ref
+   the id of a row this listing has when nothing narrows it.
+
+   The digest is of the element's rendered authored form, so it moves exactly when what was
+   declared about the element moves: a slot value, a member added to a module, a changed signature.
+   It is what lets a consumer holding its own record about an element tell that element changed
+   without reading the model.
+
+   Only an element's MODULE pairs with a namespace; a member takes its module's. An element whose
+   module pairs with nothing carries no `:ns` rather than a guessed one, and `:file` is present only
+   for a file that exists. Extracted code facts are not elements, and neither is the reflection
+   meta-grammar. Rows are ordered by sort, then id, so two runs over one model print the same bytes."
+  [db {:keys [src focus]}]
+  (let [rules  (s/vocab-rules)
+        paired (into {} (cq/q '[:find ?m ?nn :in $ %
+                                :where (Module ?m) (design ?m) (corresponds ?m ?ns) (fact ?ns)
+                                       [?ns :entity/name ?nn]]
+                              db rules))
+        owner  (into {} (cq/q '[:find ?e ?m :in $ %
+                                :where (Module ?m) (design ?m) (contains ?m ?e)]
+                              db rules))
+        nodes  (remove (fn [[e _]] (:val/extracted (cq/entity db e))) (design/declared-nodes db))
+        ids    (into {} (map (fn [[e _]] [e (:entity/id (cq/entity db e))])) nodes)
+        ;; a target outside `ids` is an anonymous value or an extracted fact: it names no element
+        ;; ?r is in the find so two relations with one kind and target stay two rows
+        refs   (reduce (fn [m [_ from k to]]
+                         (if-let [tid (ids to)]
+                           (update-in m [from (keyword k)] (fnil conj []) tid)
+                           m))
+                       {}
+                       (cq/q '[:find ?r ?e ?k ?to
+                               :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to]]
+                             db))]
+    (->> nodes
+         (filter (fn [[e _]] (or (nil? focus) (contains? focus e))))
+         (map (fn [[e t]]
+                (let [ent  (cq/entity db e)
+                      ns   (or (paired e) (some-> (owner e) paired))
+                      file (when ns (source-file src ns))
+                      rs   (refs e)]
+                  (cond-> {:id          (:entity/id ent)
+                           :name        (:entity/name ent)
+                           :sort        (sort-of t)
+                           :declaration (sha256-hex (pr-str (inst/instance-form db e)))}
+                    (:entity/doc ent) (assoc :doc (:entity/doc ent))
+                    (seq rs)          (assoc :refs (into (sorted-map)
+                                                         (map (fn [[k v]] [k (vec (sort v))]))
+                                                         rs))
+                    ns   (assoc :ns ns)
+                    file (assoc :file file)))))
+         (sort-by (juxt (comp str :sort) (comp str :id)))
+         vec)))
+
+(defn- elements-verb
+  "Build the model under `spec-dirs` WITH the code under `src`, and list its elements.
+
+   The code is always read. The pairing is the point of the listing, and one that carried
+   namespaces only when asked would let a consumer read an absent `:ns` as `pairs with nothing`
+   when nothing had looked."
+  [{:keys [src spec-dirs select]}]
+  ;; A source root that is not there builds the DESIGN alone, which is right for `describe` and
+  ;; wrong here: every element would come back unpaired, and an absent `:ns` would read as `pairs
+  ;; with nothing` when nothing had looked. Refused as undecidable instead.
+  (when-not (.isDirectory (java.io.File. (str src)))
+    (throw (ex-info (str "no source root at " src " — elements lists what the code pairs with, "
+                         "and there is no code to read")
+                    {:src src})))
+  (binding [canvas-source/*spec-dirs* spec-dirs, *out* *err*]
+    (let [db (infra-model/load-model src)]
+      {:elements (element-rows db {:src src :focus (when select (lens/focus-nodes db select))})})))
+
 (defn- render
   "The verb's answer as the exact text to put on stdout, and whether the model holds:
    `{:ok :out}`. `:out` carries its own trailing newline.
@@ -312,6 +422,11 @@
   (cond
     (= "describe" verb)
     {:ok true :out (str (:text (describe-verb opts)) "\n")}
+
+    ;; a listing is not a verdict, so it is `:ok` whatever the laws say; a model that would not
+    ;; build arrives as a throw and is undecidable like any other
+    (= "elements" verb)
+    {:ok true :out (with-out-str (pp/pprint (elements-verb opts)))}
 
     ;; a report is not a verdict, so it is `:ok` however many violations it counted. Only a law
     ;; that could not be evaluated stops it, and that arrives as a throw, not as a false bit.

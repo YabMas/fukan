@@ -3,7 +3,8 @@
    three values exist to separate a design that is VIOLATED from a checker that could not
    DECIDE. These pin that separation at the place it is easiest to lose — the render, which
    runs for the first time exactly when a check first goes red."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.edn :as edn]
+            [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.structure :refer [defstructure]]
             [fukan.canvas.projection.instance :as inst]
             [fukan.cli :as cli]
@@ -245,3 +246,87 @@
   (testing "you may scope a report; you may not scope a verdict"
     (is (= 0 (:code (run-on (build/vars->cozo [#'card-bad]) ["report" "--select" "[(Module ?n)]"]))))
     (is (= 2 (:code (#'cli/run ["check" "--select" "[(Module ?n)]"]))))))
+
+;; ── elements: the declared things, as data a program joins on ────────────────
+
+(Card ^{:name "Good"} card-good-many {:card "many"})
+
+(defn- elements-of
+  "The `elements` answer for `db` and extra `args`, read back as data, keyed by element name."
+  [db args]
+  (let [{:keys [code out]} (run-on db (into ["elements"] args))]
+    {:code code
+     :by-name (into {} (map (juxt :name identity)) (:elements (edn/read-string out)))}))
+
+(deftest elements-lists-every-authored-element-as-data
+  (testing "each declared element comes back with its sort and a declaration digest, and the
+            answer is not a verdict"
+    (let [{:keys [code by-name]} (elements-of (build/vars->cozo [#'card-good #'card-bad]) [])]
+      (is (= 0 code) "a listing never answers 1, whatever the laws say")
+      (is (= #{"Good" "Bad"} (set (keys by-name))))
+      (is (= :fukan.cli-test/Card (:sort (by-name "Good"))))
+      (is (re-matches #"[0-9a-f]{64}" (:declaration (by-name "Good")))))))
+
+(deftest a-declaration-digest-moves-with-the-declaration-and-only-with-it
+  (testing "a consumer learns an element changed by comparing digests, so two builds of one
+            declaration must agree and a changed declaration must not"
+    (let [digest #(:declaration (get-in (elements-of (build/vars->cozo [%]) []) [:by-name "Good"]))]
+      (is (= (digest #'card-good) (digest #'card-good)) "the same declaration, built twice")
+      (is (not= (digest #'card-good) (digest #'card-good-many)) "a slot value changed"))))
+
+(defn- paired-fixture
+  "A design Module `cli` holding an Operation, beside the extracted namespace `fukan.cli` and its
+   function — the pairing `:qualified-suffix` makes, and the one this very file's subject has."
+  []
+  (build/tx-maps->cozo
+   [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/id "design/cli" :entity/name "cli"}
+    {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/id "design/-main" :entity/name "-main"}
+    {:rel/id "cli|child|-main" :rel/from -1 :rel/kind :child :rel/to -2}
+    {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/id "code/fukan.cli" :entity/name "fukan.cli" :val/extracted true}
+    {:db/id -4 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/id "code/-main" :entity/name "-main" :val/extracted true}
+    {:rel/id "fukan.cli|child|-main" :rel/from -3 :rel/kind :child :rel/to -4}]))
+
+(deftest an-element-carries-the-namespace-and-file-its-module-pairs-with
+  (testing "a module names the namespace it corresponds to, a member names its module's, and the
+            file is the one under the source root; extracted facts are not elements"
+    (let [{:keys [code by-name]} (elements-of (paired-fixture) ["--src" "src"])]
+      (is (= 0 code))
+      (is (= #{"cli" "-main"} (set (keys by-name))) "the Ns and Fn facts are not listed")
+      (is (= "fukan.cli" (:ns (by-name "cli"))))
+      (is (= "fukan.cli" (:ns (by-name "-main"))) "the Operation inherits its module's namespace")
+      (is (= "src/fukan/cli.clj" (:file (by-name "cli")))))))
+
+(deftest an-element-that-pairs-with-nothing-names-no-namespace
+  (testing "a guessed namespace would let a consumer read code the element never pairs with"
+    (let [{:keys [by-name]} (elements-of (build/vars->cozo [#'card-good]) ["--src" "src"])]
+      (is (not (contains? (by-name "Good") :ns)))
+      (is (not (contains? (by-name "Good") :file))))))
+
+(defstructure Pointer "Test fixture: a structure whose slot names other elements."
+  {:to [:+ Card]})
+
+(Pointer ^{:name "P"} pointer "points at two cards" {:to [card-good card-bad]})
+
+(deftest an-element-carries-its-docstring-and-the-elements-its-slots-name
+  (testing "what an element says and what it is about are read from the row, never from its form"
+    (let [{:keys [by-name]} (elements-of (build/vars->cozo [#'pointer #'card-good #'card-bad]) [])]
+      (is (= "points at two cards" (:doc (by-name "P"))))
+      (is (= {:to (vec (sort [(:id (by-name "Good")) (:id (by-name "Bad"))]))}
+             (:refs (by-name "P")))
+          "each ref is the id of a row in the same listing, sorted")
+      (is (not (contains? (by-name "Good") :doc)) "no docstring, no :doc")
+      (is (not (contains? (by-name "Good") :refs))
+          "a scalar slot names no element, so there is nothing to ref"))))
+
+(deftest elements-refuses-a-source-root-that-is-not-there
+  (testing "a missing root builds the design alone, and every element would come back unpaired —
+            an absent :ns that means `nothing looked`, not `pairs with nothing`"
+    (let [{:keys [code error]} (#'cli/run ["elements" "--src" "/no/such/source/root"])]
+      (is (= 2 code))
+      (is (re-find #"no source root at /no/such/source/root" error)))))
+
+(deftest elements-answers-only-in-data
+  (testing "it has one format, so asking for another is a question it cannot answer"
+    (let [{:keys [code error]} (#'cli/run ["elements" "--format" "text"])]
+      (is (= 2 code))
+      (is (= "`--format` is not a flag `elements` takes" error)))))

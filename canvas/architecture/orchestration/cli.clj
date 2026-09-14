@@ -1,11 +1,12 @@
 (ns canvas.architecture.orchestration.cli
   "Self-spec: fukan's non-REPL entry (`fukan.cli`) — what the REPL cockpit does, for a PROGRAM.
 
-   Three verbs, because a reader arrives with three questions: `describe` (what has this project
-   DECLARED), `check` (does the code still OBEY it) and `report` (how far from obeying is one
-   region of it). The split between the last two is the whole point of having both — `check`
-   decides the model and may be scoped by nothing, `report` measures a slice and gates on
-   nothing — so only the verb that decides can fail a build.
+   Four verbs, because a reader arrives with four questions: `describe` (what has this project
+   DECLARED), `check` (does the code still OBEY it), `report` (how far from obeying is one region
+   of it) and `elements` (what are the declared things, as data to join on). The split between
+   `check` and `report` is the whole point of having both — `check` decides the model and may be
+   scoped by nothing, `report` measures a slice and gates on nothing — so only the verb that
+   decides can fail a build.
 
    A sibling of `core` in the orchestration subsystem, and for the same reason: it composes the
    model lifecycle behind a `-main` and realizes no subject faculty of its own. Its judgement is
@@ -42,6 +43,16 @@
      Laws are identified by the (structure tag, description) PAIR, not by `:key`: the key is optional
      and most laws carry none, so a report that grouped on it would address a fraction of what ran."
     {:signature [:=> [:catn [:violations :any] [:focus [:maybe [:vector substrate/Eid]]]] :any]})
+  (Operation element-rows
+    "Every AUTHORED element of the model as a row a consumer joins on: its identity, name and sort,
+     a digest of its rendered declaration, its docstring, the ids of the elements each relation slot
+     names, and — where its module pairs with code — the namespace and the source file under `src`
+     it pairs with. Extracted facts and the reflection meta-grammar are not elements, and a slot
+     naming an anonymous value names none. A member takes its module's namespace; an element whose
+     module pairs with nothing carries none rather than a guessed one."
+    {:signature [:=> [:catn [:db :any] [:opts :map]] :any]
+     :performs  [:io :state :throws]               ; reads the model and the file system for the source path
+     :delegates [design/declared-nodes instance/instance-form]})
   (Operation -main
     "Entry point: dispatch the verb, build the model under the given spec-dirs, print the
      result — exit 0 satisfied, 1 unsatisfied, 2 undecidable. `report` never answers 1: it
@@ -49,4 +60,4 @@
     {:signature [:=> [:catn [:args [:sequential :string]]] :nil]
      :performs  [:io :require :state :throws]
      :delegates [infra/load-model pipeline/build-model cozo-law/check lens/focus-nodes
-                 design/design-text instance/violations-text findings tally]}))
+                 design/design-text instance/violations-text findings tally element-rows]}))
