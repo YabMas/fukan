@@ -20,6 +20,7 @@
    the `fukan.model.extraction` plug-point; the composition root registers `extract-roots` as the fact
    extractor. clj-kondo is the wheel we don't reinvent."
   (:require [clj-kondo.core :as kondo]
+            [clojure.string :as str]
             [clojure.tools.reader :as reader]
             [clojure.tools.reader.reader-types :as reader-types]
             [fukan.common.extraction.clojure.effect :as clj-effect]
@@ -29,11 +30,32 @@
 
 (defn- analyze
   "Run clj-kondo over `paths` and return its `:analysis` — namespace + var
-   definitions. Reads source (and writes clj-kondo's cache); deterministic output."
+   definitions. Reads source (and writes clj-kondo's cache); deterministic output.
+
+   Throws when clj-kondo could not PARSE a file. Its analysis simply omits a file it cannot read, so
+   without this the file's namespace and every function in it vanished from the model with nothing
+   saying so: `check` answered satisfied over code nobody read, and a design element whose code was
+   in that file read as paired with nothing. A build that could not read the code is undecidable,
+   which is what a throw from extraction becomes.
+
+   `:syntax` findings only. Any other finding clj-kondo raises — at whatever level a project's own
+   configuration sets it — is lint about code it DID read, and none of it costs the model a node."
   [paths]
-  (:analysis (kondo/run! {:lint (vec paths)
-                          :config {:output {:analysis {:var-definitions {:meta true}
-                                                       :var-usages true}}}})))
+  (let [{:keys [analysis findings]}
+        (kondo/run! {:lint (vec paths)
+                     :config {:output {:analysis {:var-definitions {:meta true}
+                                                  :var-usages true}}}})
+        unreadable (filter #(= :syntax (:type %)) findings)]
+    (when (seq unreadable)
+      (throw (ex-info (str "extraction could not read "
+                           (count (distinct (map :filename unreadable))) " file(s): "
+                           (->> unreadable
+                                (map #(str (:filename %) ":" (:row %) " " (:message %)))
+                                distinct
+                                (take 3)
+                                (str/join "; ")))
+                      {:unreadable (vec (distinct (map :filename unreadable)))})))
+    analysis))
 
 (defn- alias-ns
   "The namespace an auto-resolved alias reads as, for the extent read below: one PER ALIAS, minted

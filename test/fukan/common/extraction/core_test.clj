@@ -236,6 +236,19 @@
       (is (contains? (calls-in db) ["poly/render-shape[:tagged]@poly-ext" "width"])
           "the method in a file holding `#{#inst \"2020-01-01\" \"2020-01-01\"}` keeps its body call"))))
 
+(deftest a-file-extraction-cannot-read-stops-the-build
+  (testing "clj-kondo leaves a file it cannot parse out of its analysis, so the namespace and every
+            function in it would vanish from the model with nothing saying so — a check answering
+            satisfied over code nobody read. Extraction refuses instead, naming the file."
+    (let [dir  (java.nio.file.Files/createTempDirectory "fukan-unreadable"
+                                                        (make-array java.nio.file.attribute.FileAttribute 0))
+          file (str dir "/broken.clj")]
+      (spit file "(ns broken)\n\n(defn oops [x]\n  (let [y (inc x)\n")
+      (let [thrown (try (tc/extract-roots [(str dir)]) nil
+                        (catch clojure.lang.ExceptionInfo e e))]
+        (is (some? thrown) "the unreadable file is a refusal, not a silently smaller model")
+        (is (= [file] (:unreadable (ex-data thrown))) "and the refusal names the file")))))
+
 (deftest every-modelled-stage-is-realized-in-src
   (testing "fukan-on-itself: build-model unifies the authored self-model (canvas/)
             with the code extracted from src/ on one graph, and every modelled
