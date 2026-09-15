@@ -4,11 +4,13 @@
    defstructure canvas specs into one native Cozo structure substrate (merging the extracted
    code when given a source tree). The held Cozo db is closed on each reload.
 
-   This is also fukan-on-itself's composition root: it registers fukan's custom code FACT
-   extractor (the Clojure extractor over fukan's `src/`) at the `fukan.model.extraction`
-   plug-point. The type dialect needs no wiring here — `fukan.common.typing.malli` self-registers the
-   full malli dialect when it loads (required below to guarantee it is). `check` is not wired: it
-   lives in `fukan.cozo.law` (the engine) and callers require it directly — no registry."
+   This is also the DEFAULT composition root — for fukan and for any consumer alike. It
+   registers the Clojure fact extractor at the `fukan.model.extraction` plug-point; nothing
+   here is fukan-specific, so a Clojure project consumes it as-is. A project targeting another
+   language writes its own composition root and registers its own extractor. The type dialect
+   needs no wiring — `fukan.common.typing.malli` self-registers when it loads (required below to
+   guarantee it is). `check` is not wired: it lives in `fukan.cozo.law` (the engine) and callers
+   require it directly — no registry."
   (:require [fukan.common]
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]

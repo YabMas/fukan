@@ -28,20 +28,26 @@
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb] :string]}
   architecture-overview
-  "Render fukan's subsystems + modules + the :may-depend DAG (string)."
-  [db]
-  ;; FULL tags, deliberately: the kernel ships no vocabulary, so this src/ print-dual names the
-  ;; code-grammar sorts as DATA — no require, no ::alias. The spelling is the signal: a full tag
-  ;; in an `is` marks a namespace deliberately not required here (soft coupling only).
-  (let [subs  (->> (cq/q '[:find ?s ?sn :where (is ?s :fukan.common.vocab.code.subsystem/Subsystem) [?s :entity/name ?sn]] db)
-                   (sort-by second))
-        nmod  (count (cq/q '[:find ?m :where (is ?m :fukan.common.vocab.code.module/Module)] db))]
-    (str/join
-     "\n"
-     (concat
-      ["FUKAN — projected architecture overview (code-side subsystems)"
-       (str "  " nmod " modules · " (count subs) " subsystems · derived live from the model")
-       ""
-       "━━ SUBSYSTEMS — capability clusters of Modules (⟶ = may-depend) ━━"
-       ""]
-      (map (fn [[seid sname]] (subsystem-line db seid sname)) subs)))))
+  "Render the project's subsystems + modules + the :may-depend DAG (string). `title` names the
+   modelled system in the banner; the 1-arity omits it — a consumer's model is not fukan's."
+  ([db] (architecture-overview db nil))
+  ([db title]
+   ;; FULL tags, deliberately: the kernel ships no vocabulary, so this src/ print-dual names the
+   ;; code-grammar sorts as DATA — no require, no ::alias. The spelling is the signal: a full tag
+   ;; in an `is` marks a namespace deliberately not required here (soft coupling only).
+   (let [subs  (->> (cq/q '[:find ?s ?sn :where (is ?s :fukan.common.vocab.code.subsystem/Subsystem) [?s :entity/name ?sn]] db)
+                    (sort-by second))
+         nmod  (count (cq/q '[:find ?m :where (is ?m :fukan.common.vocab.code.module/Module)] db))]
+     (str/join
+      "\n"
+      (concat
+       [(str (when title (str title " — ")) "projected architecture overview (code-side subsystems)")
+        (str "  " nmod " modules · " (count subs) " subsystems · derived live from the model")
+        ""]
+       (if (empty? subs)
+         ["No subsystems authored yet — the model has no code-side clustering to project."
+          "(Author Subsystem instances to cluster Modules and declare their :may-depend DAG.)"]
+         (concat
+          ["━━ SUBSYSTEMS — capability clusters of Modules (⟶ = may-depend) ━━"
+           ""]
+          (map (fn [[seid sname]] (subsystem-line db seid sname)) subs))))))))
