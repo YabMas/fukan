@@ -302,6 +302,35 @@
   [c]
   (and (vector? c) (= 1 (count c)) (seq? (first c))))
 
+(defn- literal-datom?
+  "True for a datom clause whose VALUE is a literal — `[?r :rel/kind :calls]` — and for a sort pin
+   that lowers to one (`structure/pin-clause` answers by triple for a stored sort, by rule for a
+   genus). With the entity free that is a seek on the `(a, v)` index rather than a scan of the
+   attribute, which is what `order-expansion` needs to know to open an unanchored body."
+  [c]
+  (cond
+    (and (vector? c) (= 3 (count c)) (keyword? (nth c 1)))
+    (not (dvar? (nth c 2)))
+    (and (seq? c) (= 'is (first c)) (= 3 (count c)) (keyword? (nth c 2)))
+    (recur (structure/pin-clause (nth c 2) (nth c 1)))
+    :else false))
+
+(defn- negation? [c] (and (seq? c) (contains? #{'not 'not-join} (first c))))
+
+(defn- visible-vars
+  "The vars of `c` its SIBLINGS can see. A `not-join` exposes its join vars and nothing else — the
+   rest are private to the helper rule it compiles to, and a sibling that happens to reuse one of
+   their names shares nothing with it."
+  [c]
+  (if (and (seq? c) (= 'not-join (first c)))
+    (filter dvar? (second c))
+    (vars-of c)))
+
+(defn- bound-by
+  "The vars `c` leaves BOUND for the clauses after it — none, for a negation."
+  [c]
+  (if (negation? c) () (vars-of c)))
+
 (defn- plain-rule-call?
   "A positive rule call — the only clause shape inlining touches. `not`/`not-join`/`or-join` are
    left alone: `not (A, B)` is not `not A, B`, and the join helpers already compile to their own
@@ -476,9 +505,16 @@
    clause sharing the most vars with what is already bound, earliest-first on ties. This is the
    half that matters — see the measurements above.
 
-   Re-ordering is safe for a `not` landing ahead of the clauses that bind it: Cozo does its own
+   Re-ordering is SAFE for a `not` landing ahead of the clauses that bind it: Cozo does its own
    binding analysis over the whole body rather than positionally (measured — `not *t_bool[e,…],
-   *t_str[e, 'entity/name', n]` answers exactly as the reverse order does).
+   *t_str[e, 'entity/name', n]` answers exactly as the reverse order does). It is not HARMLESS,
+   because this loop is positional even where Cozo is not: a clause taken is a clause whose vars
+   count as bound from then on, and a negation binds nothing. Taken early it seeds `bound` with
+   vars nobody has produced, and every later clause is scored against them — `[?r :rel/to ?t]`
+   chosen as a probe on a `?t` that is still free, which is the scan this function exists to
+   avoid. Measured on fukan's own model, the signature-agreement law: 258ms → 744ms. So a negation
+   is held back until what it mentions is bound, exactly as a predicate is, and it is judged on
+   its `visible-vars` — a `not-join`'s private vars are nobody's business but its helper's.
 
    It is NOT safe for a PREDICATE. That analysis covers relational atoms; a predicate compiles
    to an expression — a comparison, or a registered predicate port's function call — and a
@@ -490,23 +526,48 @@
    `assumed` names vars to ORDER against without treating them as bound — the head vars of a rule
    whose caller is expected to supply them. They pull the clauses that constrain them forward,
    which is the whole point, but they must not license a predicate: the caller's binding is Cozo's
-   business, and a `starts_with` emitted ahead of what this body binds fails outright."
+   business, and a `starts_with` emitted ahead of what this body binds fails outright.
+
+   TIES are broken before written order gets a say, because written order is the author's and the
+   author was writing logic, not a plan. Two breaks, in this order, both measured on brian:
+
+   A var this body HAS bound outranks one a caller MAY bind. An assumed var is a bet — it pays
+   only when the call site binds it, and a rule read under a `not` is evaluated whole, with
+   nothing bound at all. Scoring the two alike let `[(declared-dep ?fr ?tr) (reg-within ?fr ?fa)
+   (reg-within ?tr ?ta) (may-depend ?fa ?ta)]` keep its written order: the second `reg-within`
+   tied with the `may-depend` hop on one var each, won on position, and the body opened with a
+   cross product the hop then cut to four rows. With an 11,044-row `reg-within` that is 122M pairs
+   and did not finish in ten minutes; the hop taken first — a chain, no product — is 773ms.
+
+   A LITERAL outranks nothing. A datom with a literal value is an `(a, v)` index seek; the same
+   attribute with both ends free is a scan of every datom carrying it. So an expansion that shares
+   no var with what precedes it — `(interior ?owner ?interior)` after a join that binds neither —
+   must open on its `:rel/kind`, not on the `:rel/from` that happens to be written first: one row
+   against every relation in the model, per row of the join it landed in (52.9s → 1.9s).
+
+   Both are TIE-breaks and deliberately no more: the var count still decides first, so an ordering
+   the var count already settled is exactly what it was."
   ([clauses bound] (order-expansion clauses bound #{}))
   ([clauses bound assumed]
    (loop [pending (vec clauses), bound bound, out []]
      (if (empty? pending)
        out
-       (let [ready? (fn [i] (or (not (predicate-clause? (pending i)))
-                                (every? bound (vars-of (pending i)))))
+       (let [ready? (fn [i] (let [c (pending i)]
+                              (or (not (or (predicate-clause? c) (negation? c)))
+                                  (every? bound (visible-vars c)))))
              scored (into bound assumed)
-             score  (fn [i] (count (filter scored (vars-of (pending i)))))
+             score  (fn [i] (let [c (pending i), vs (visible-vars c)]
+                              [(count (filter scored vs))
+                               (count (filter bound vs))
+                               (if (literal-datom? c) 1 0)]))
              idxs   (range (count pending))
              usable (filterv ready? idxs)
              pool   (if (seq usable) usable (vec idxs))
-             best   (reduce (fn [b i] (if (> (score i) (score b)) i b)) (first pool) (rest pool))
+             best   (reduce (fn [b i] (if (pos? (compare (score i) (score b))) i b))
+                            (first pool) (rest pool))
              c      (pending best)]
          (recur (into (subvec pending 0 best) (subvec pending (inc best)))
-                (into bound (vars-of c))
+                (into bound (bound-by c))
                 (conj out c)))))))
 
 (defn ^:private ^{:malli/schema [:=> [:cat :any :any] :any]}
@@ -524,8 +585,8 @@
         (let [[c & more] pending]
           (if-let [[cs n*] (expand-call c idx 0 n)]
             (let [cs* (order-expansion cs bound)]
-              (recur (vec more) (into bound (mapcat vars-of cs*)) n* (into out cs*)))
-            (recur (vec more) (into bound (vars-of c)) n (conj out c))))))))
+              (recur (vec more) (into bound (mapcat bound-by cs*)) n* (into out cs*)))
+            (recur (vec more) (into bound (bound-by c)) n (conj out c))))))))
 
 (defn- compile-rule
   "A datalog rule `[(head args…) body…]` → `[def-lines refs]`: the head line, any not-join/
