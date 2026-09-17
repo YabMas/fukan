@@ -94,9 +94,9 @@ structure substrate **is** the model (no separate model-map).
   free; one filtering on interior vars has a cross product that the filter cuts down, and inlining
   lifts that product inside whatever join the call site sits in. Measured on brian, a Band's
   `in-band` — 121 prefixes × 904 namespaces cut to 1,070 rows — inlined twice into the cross-band
-  conformance law cost 27.1s against 4.1s left standing. `inline-index` refuses these; there is
-  exactly one in the shipped vocabulary, and a consumer's `defrelation` could add another, which is
-  the argument for stating the rule rather than the exception.
+  conformance law cost 27.1s against 4.1s left standing. `inline-index` refuses these; the shipped
+  vocabulary has three — `in-band` and Region's two claim relations — and a consumer's
+  `defrelation` can add more, which is the argument for stating the rule rather than the exception.
   ⚠ AND WHAT TO DO WITH A RULE THAT CANNOT STOP BEING ONE: a multi-bodied head must materialize, so
   **its own body is ORIENTED AGAINST ITS HEAD VARS** (`compile-rule`) — Cozo runs such a call under
   the caller's bindings, so the head args are what a call site can be expected to have bound, and a
@@ -174,14 +174,16 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
 
 - `common/fukan/common/vocab/grouping.clj` — `Grouping` (the most abstract membership primitive) +
   `Connected` (a flow-node facet). The structural primitives the rest builds on.
-- `common/fukan/common/vocab/code/{kind,effect,operation,module,subsystem,band,stratum}.clj` — the
-  code grammar (Kind / Effect / Operation / Module / Subsystem / Band / Stratum). **PURE DESIGN —
-  language-neutral**, with ONE stated exception, carried by two elements: `band` names the Clojure
-  `Ns` sort, and `stratum` reads `ns-depends` and the `Module ↦ Ns` pairing (both by name, the
-  documented spelling for a deliberate non-require), because each one's whole point is that its
-  evidence is the EXTRACTED call graph. A non-Clojure project gets vacuous laws rather than a load
-  error; the honest fix is an extractor-neutral code-unit sort, and a second extractor is the trigger
-  to build one. Each element
+- `common/fukan/common/vocab/code/{kind,effect,operation,module,subsystem,region,band,stratum}.clj`
+  — the code grammar (Kind / Effect / Operation / Module / Subsystem / Region / Band / Stratum).
+  **PURE DESIGN — language-neutral**, with ONE stated exception, carried by three elements:
+  `region` and `band` name the Clojure `Ns` sort, and `stratum` reads `ns-depends` and the
+  `Module ↦ Ns` pairing (all by name, the documented spelling for a deliberate non-require),
+  because each one's whole point is that its evidence is the EXTRACTED call graph. A non-Clojure
+  project gets vacuous laws rather than a load error; the honest fix is an extractor-neutral
+  code-unit sort, and a second extractor is the trigger to build one. `Region` supersedes `Band` —
+  its membership is a partition where Band's is a covering, and it claims no layering — and Band
+  ships only while existing canvases still author it. Each element
   file carries its structure and the laws that are its own slot semantics, and knows nothing about
   what language the code is written in.
 - `common/fukan/common/vocab/patterns/plug_point.clj` — the PATTERN TIER: `PlugPoint`, one rung above
@@ -609,44 +611,11 @@ and the old Phase 4–6 analyzer are retired.
 **Classpath tiers (`deps.edn`).** Base `:paths ["src" "common" "resources"]` is the *shipped* surface —
 `fukan.*` (core) + `fukan.common.*` (grammar). The `.` root (fukan's self-model `canvas/`, `tasks/`,
 `hooks/`) lives on the fukan-local aliases (`:dev`/`:test`/`:kondo`/`:lint`/`:nrepl`/`:run`), so a
-consuming project inherits only core + grammar.
-
-**Consuming fukan from another project.** A consuming project depends on fukan (a `:local/root`
-alias is enough — no publishing), puts its specs in `canvas/` at its root, and drives the shipped
-cockpit:
-
-    clj -M:fukan
-    (require '[fukan.repl :refer [go refresh status drift check architecture]])
-    (go {:src "path/to/the/core" :title "BRIAN"})  ; :spec-dirs and :reload-dirs default to ["canvas"]
-
-`:src` is the only thing a consumer must supply, and it may name a path that does not exist
-yet — the model-first workflow, where every authored Operation is drift until realised.
-`:title` names the project in `(architecture)`'s banner. `go` holds the config; every other
-command reads it, so they stay bare.
-
-The alias itself, in `~/.clojure/deps.edn` — one global alias works from any project root,
-because `:extra-paths ["."]` resolves against cwd:
-
-    :fukan {:extra-deps  {fukan/fukan {:local/root "/path/to/fukan"}}
-            :extra-paths ["."]
-            :jvm-opts    ["-Dclj-reload.auto-init=false"]}
-
-Both opts are load-bearing. `:extra-paths ["."]` puts the consumer's `canvas/` on the
-classpath — the spec dir name is both the resource path and the leading namespace segment, so
-`["canvas"]` cannot substitute. `-Dclj-reload.auto-init=false` is **required, not tuning**:
-clj-reload walks every classpath dir when its namespace loads, and `.` is on the classpath — so
-it would scan the consumer's entire tree (`node_modules`, `target`, `.git`) before any fukan
-code runs. On a real-sized repo that is an OOM, not a slowdown. The cockpit inits clj-reload
-itself, scoped to `:reload-dirs`, so the load-time scan buys nothing. (fukan's own `:dev`,
-`:test` and `:nrepl` aliases set the same opt for the same reason.)
-
-`fukan.infra.model` is the default composition root (Clojure extractor + malli dialect) and
-needs no wiring. A project targeting another language writes its own and registers its own
-extractor at the `fukan.model.extraction` plug-point.
-
-fukan-on-itself is the FIRST consumer, not a privileged one — `dev/user.clj` is a thin wrapper
-over `fukan.repl` supplying fukan's own defaults, so the consumer surface is exercised on every
-REPL start.
+consuming project inherits only core + grammar. **Consuming fukan from another project:** depend on
+fukan, `(:require [fukan.common])` (or the specific `fukan.common.vocab.*` elements), bind
+`fukan.canvas.ingestion.canvas-source/*spec-dirs*` to your own spec dir, and call `build-model` with
+your own code-root (the default composition in `fukan.infra.model` registers the Clojure extractor +
+malli dialect; write your own composition to vary either).
 
 ## Jujutsu workflow conventions
 

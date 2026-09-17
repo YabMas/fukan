@@ -133,13 +133,12 @@
    fukan.common.typing.render-test/RenderHolder hooks.fukan.structure/instance
    fukan.common.typing.vocab-test/SchemaHolder hooks.fukan.structure/instance
    fukan.common.vocab.code.band/Band hooks.fukan.structure/instance
-   fukan.common.vocab.code.band/NsPrefix hooks.fukan.structure/instance
    fukan.common.vocab.code.effect/Effect hooks.fukan.structure/instance
    fukan.common.vocab.code.kind/Kind hooks.fukan.structure/instance
    fukan.common.vocab.code.module/Module hooks.fukan.structure/instance
    fukan.common.vocab.code.operation/Operation hooks.fukan.structure/instance
+   fukan.common.vocab.code.region/NsPrefix hooks.fukan.structure/instance
    fukan.common.vocab.code.region/Region hooks.fukan.structure/instance
-   fukan.common.vocab.code.region/RegionPrefix hooks.fukan.structure/instance
    fukan.common.vocab.code.stratum/Stratum hooks.fukan.structure/instance
    fukan.common.vocab.code.subsystem/Subsystem hooks.fukan.structure/instance
    fukan.common.vocab.grouping/Grouping hooks.fukan.structure/instance

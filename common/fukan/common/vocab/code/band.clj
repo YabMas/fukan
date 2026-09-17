@@ -2,6 +2,14 @@
   "The `Band` element — a stratum of a codebase, claimed by NAMESPACE PREFIX and checked against
    the EXTRACTED call graph.
 
+   SUPERSEDED BY `Region` (fukan.common.vocab.code.region), and still shipped only because existing
+   canvases author it — nido's bands and brian's region harness. Author a Region. The two differ
+   in what membership means: a namespace is in EVERY Band having a prefix its name starts with, as
+   a plain string, so `app.server` claims `app.server-components.x` and a subtree carved out of a
+   larger prefix sits in both. Band membership is therefore a covering, and the cross-band law
+   reports one undeclared edge once for every pairing of its ends' Bands. A Region resolves the same
+   declaration to a partition, and its wording claims no layering.
+
    The sibling of `Subsystem`, and the difference is the evidence. A Subsystem clusters authored
    Modules and checks its `:may-depend` DAG against `module-depends`, which is built from authored
    `:delegates` — so it says nothing until a region is modelled operation by operation. A Band
@@ -10,34 +18,22 @@
    evidence — and the second one needs no authoring at all, which is what makes a large existing
    codebase declarable in an afternoon rather than an adoption project.
 
-   ⚠ THE ONE PLACE THIS TIER REACHES A LANGUAGE. `Ns` is a Clojure fact sort, and this file names
-   it — by FULL TAG KEYWORD, the documented spelling for a namespace deliberately not required, so
-   the coupling is at the DATA level and not the compile level. `ns-depends` and the rest reach it
-   the same way, through datalog injection. A project with a different extractor loads this vocab,
-   mints no `Ns` nodes, and gets laws that are vacuous rather than laws that fail — which is the
-   right failure, but it is still a language leaking into a tier that claims to be neutral. The
-   honest fix is an extractor-neutral CODE-UNIT sort for every language to populate; inventing one
-   before a second extractor exists would be designing a middle layer ahead of its case, so this
+   ⚠ THIS TIER REACHES A LANGUAGE HERE (as `Region` does). `Ns` is a Clojure fact sort, and this
+   file names it — by FULL TAG KEYWORD, the documented spelling for a namespace deliberately not
+   required, so the coupling is at the DATA level and not the compile level. `ns-depends` and the
+   rest reach it the same way, through datalog injection. A project with a different extractor loads
+   this vocab, mints no `Ns` nodes, and gets laws that are vacuous rather than laws that fail — which
+   is the right failure, but it is still a language leaking into a tier that claims to be neutral.
+   The honest fix is an extractor-neutral CODE-UNIT sort for every language to populate; inventing
+   one before a second extractor exists would be designing a middle layer ahead of its case, so this
    carries the debt in the open instead. A second extractor is the trigger.
 
    The membership relation is DERIVED, never authored: a namespace's band is readable from its own
    name and so cannot drift from the tree. That is the whole trade — you give up the freedom to
    put a namespace anywhere, and you get a design that no amount of moving files can quietly
    falsify."
-  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]))
-
-(defn ^:export read-prefix
-  "A bare string in a `:prefix` vector → `NsPrefix` clauses, so a band authors its prefixes as
-   plain strings rather than as constructor calls."
-  [v]
-  [(list 'value v)])
-
-(defstructure ^:value NsPrefix
-  "One namespace prefix a Band claims. A `^:value` structure because a slot holding a repeated
-   LEAF has no cardinality in the kernel — a scalar slot is one or optional — so a leaf that
-   repeats is modelled as a content-deduped node."
-  {:value :string}
-  (reader read-prefix))
+  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.common.vocab.code.region :refer [NsPrefix]]))
 
 ;; `in-band` is the membership relation, derived from the namespace's own name. It is declared
 ;; here rather than beside `Ns` because it is Band's semantics, not the extractor's: what a Band
@@ -86,8 +82,9 @@
     ;;
     ;; GATED on a Band existing, and the gate is not politeness to non-adopters — it is what the
     ;; rule means. A project that declares no bands is asserting nothing about coverage. A project
-    ;; that declares one is asserting a partition, and a partition with a hole in it is the
-    ;; blindness above wearing a declaration.
+    ;; that declares one is asserting that every namespace is claimed, and a hole in that claim is
+    ;; the blindness above wearing a declaration. (At least one band, not exactly one: a Band's
+    ;; membership is a covering.)
     {:scope :global
      :offenders [?ns]
      :rules [[(some-band ?b) (is ?b ::Band)]]

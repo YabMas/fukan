@@ -45,9 +45,16 @@
   "What the system must remember, and views derived over it. Owns the connection as its INTERIOR:
    nothing outside this subtree may reach Execute, whatever edges the table grants elsewhere.
 
+   SEALED, which is Phase 1 stated where a law can read it: `Transport has no arrow to Persistence
+   or External — both are reached through Domain, and that single absence is the whole of Phase 1`.
+   Sealing needs only the TARGET claimed, so every caller is checked — including the ten regions
+   this model does not declare yet, which is exactly where Transport and Presentation still sit.
+   Domain's `:may-depend` edge is its licence; nothing else has one.
+
    No `:may-depend` on Domain, and that absence is the assertion — Persistence returns rows, Domain
    parses them into values (contract P2). An edge the other way is the law firing, not a gap."
   {:prefix     ["brian.database."]
+   :sealed     true
    :interior   [Execute]
    :may-depend [Execute]})
 

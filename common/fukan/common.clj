@@ -12,6 +12,7 @@
             [fukan.common.vocab.code.operation]
             [fukan.common.vocab.code.module]
             [fukan.common.vocab.code.subsystem]
+            [fukan.common.vocab.code.region]
             [fukan.common.vocab.code.band]
             [fukan.common.vocab.code.stratum]
             [fukan.common.vocab.patterns.plug-point]

@@ -1,165 +1,215 @@
 (ns fukan.common.vocab.code.region
-  "The `Region` element — a stratum of a codebase claimed by NAMESPACE PREFIX, arranged in a
-   CONTAINMENT tree, and checked against the EXTRACTED call graph.
+  "The `Region` element — a grouping of namespaces claimed by NAME PREFIX, together with the regions
+   its namespaces may depend on, checked against the EXTRACTED namespace dependency graph.
 
-   Region is `Band` with two things Band does not have, both of them demanded by the first real
-   consumer's own design document rather than invented here:
+   The sibling of `Subsystem`, and the difference is the evidence. A Subsystem clusters authored
+   Modules and checks its `:may-depend` graph against `module-depends`, built from authored
+   `:delegates` — so it says nothing until code is modelled operation by operation. A Region claims
+   namespaces by prefix and checks the same shape of declaration against `ns-depends`, which
+   extraction produces the moment it runs, so an existing codebase is declarable without authoring
+   a single operation.
 
-   CONTAINMENT (`:child`). Band's `:may-depend` is flat, so a box that is not itself a stratum —
-   brian's `Access`, which holds `Identity` and `Policy` at different depths — cannot be said at
-   all, and a broad edge (`Presentation` may depend on `Domain`) has to be restated against every
-   one of Domain's fourteen entities. Conformance here reads the edge against the ANCESTRY of both
-   ends, so the broad edge covers the narrow dependency and the box carries no edges of its own.
+   A Region asserts REACH, and ranks nothing. `:may-depend` says which regions a region's namespaces
+   may depend on; two regions neither of which reaches the other are simply unrelated. Acyclicity is
+   a separate claim, kept on its own merits: acyclic reach is a partial order, so a codebase that
+   conforms has no dependency cycle between regions. A partial order is not a layering — nothing
+   gives a region a depth.
 
-   INTERIORITY (`:interior`). A `:may-depend` DAG can say who may depend on a region; it cannot say
-   that a region is reachable only from inside its own parent. brian draws exactly that — `Execute`,
-   the database connection, dashed inside `Persistence` — and calls it the rule the drawing states
-   rather than writes. `:interior` is Region's own containment kind (NOT a `contains` species — see
-   the note on the relation), and the interior law denies every edge from outside the owner's
-   subtree that no `:may-depend` edge INTO the interior licenses. The explicit-licence escape is what
-   lets a composition root declare its way in (brian's `Boot` may depend on everything, interiors
-   included) without the law needing a notion of privilege.
+   MEMBERSHIP IS A PARTITION, derived from the namespace's name and never authored. A prefix claims
+   the namespace it names and every namespace below it at a `.` boundary — `app.server` claims
+   `app.server.http` and not `app.server-components` — and a prefix already ending in `.` claims only
+   what lies below it. Where two regions' prefixes both claim a namespace, the LONGER prefix wins,
+   which is what lets a region be carved out of another's subtree (`app.db.execute` out of
+   `app.db`). Two claims on one namespace can only tie by being the same string, and a prefix
+   claimed by two regions is a law of its own; with coverage on top, every namespace is in exactly
+   one region, so each undeclared dependency is one finding.
 
-   Membership is DERIVED from the namespace's own name, never authored — Band's trade, kept: you
-   give up putting a namespace anywhere, and get a declaration no file move can quietly falsify.
-   Where prefixes nest (`brian.database.` and `brian.database.execute`), the LONGEST claim wins, so
-   an interior can be carved out of the region that surrounds it without restating the surroundings.
+   REGIONS NEST, and nesting has two kinds. `:child` holds a region visible from outside, so a
+   declaration can name a BOX that is not itself a stratum — a pair of regions at different depths
+   that share a name and nothing else — and an outward edge onto the box covers what it holds
+   without restating it against each part. `:interior` holds one that is NOT visible.
 
-   ⚠ Inherits Band's language leak: `Ns` is a Clojure fact sort and this file names it by full tag
-   keyword, at the DATA level, through datalog injection. A project with another extractor mints no
-   `Ns` and gets vacuous laws rather than failing ones. A second extractor is the trigger to lift a
-   neutral code-unit sort; until then the debt sits here in the open, as it does in `band`."
-  (:require [fukan.canvas.core.structure :as s :refer [defstructure defrelation]]))
+   SEALING is what `:interior` turns out to be a case of. A region says `:sealed` of itself to admit
+   an inbound crossing only from a caller something licensed; a region held as another's `:interior`
+   is sealed too, and additionally licenses its owner's subtree. One law covers both. That is the
+   rule a drawing states by dashing a node and an arrow-graph cannot state at all — a database
+   connection sitting inside the region that owns it, reachable from its owner and from the
+   composition root that declares its way in, and from nowhere else.
+
+   A seal is independent of `:may-depend`, not a shorthand for it. Conformance asks whether an edge
+   BETWEEN two regions was declared, and needs both ends claimed to ask it; a seal asks what may
+   reach INTO a region, and needs only the target claimed. That asymmetry is why a seal says
+   something true about a codebase that is mostly not modelled yet, and why `Domain :may-depend
+   [Persistence]` — a perfectly good declared edge — still does not reach what Persistence seals.
+
+   ⚠ THIS TIER REACHES A LANGUAGE HERE (as `Band` does). `Ns` is a Clojure fact sort, named by FULL
+   TAG KEYWORD — the documented spelling for a namespace deliberately not required, so the coupling
+   is at the data level and not the compile level. A project with a different extractor mints no
+   `Ns` nodes and gets vacuous laws rather than failing ones. The honest fix is an extractor-neutral
+   code-unit sort, and a second extractor is its trigger."
+  (:require [clojure.string :as str]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.cozo.query :as cq]))
 
 (defn ^:export read-prefix
-  "A bare string in a `:prefix` vector → `RegionPrefix` clauses, so a region authors its prefixes
-   as plain strings rather than as constructor calls."
+  "A bare string in a `:prefix` vector → `NsPrefix` clauses, so a grouping authors its prefixes as
+   plain strings rather than as constructor calls."
   [v]
   [(list 'value v)])
 
-(defstructure ^:value RegionPrefix
-  "One namespace prefix a Region claims. A `^:value` structure because a slot holding a repeated
-   LEAF has no cardinality in the kernel — a scalar slot is one or optional — so a leaf that
-   repeats is modelled as a content-deduped node.
-
-   Region mints its OWN rather than importing Band's `NsPrefix`: requiring `band` would activate
-   Band's three laws alongside Region's, and Band's conformance law is another full `ns-depends`
-   evaluation whose answer is already Region's to give. Standing alone costs one small duplicated
-   value structure and keeps the check to one pass."
+(defstructure ^:value NsPrefix
+  "One namespace prefix a grouping claims. A `^:value` structure because a slot holding a repeated
+   LEAF has no cardinality in the kernel — a scalar slot is one or optional — so a leaf that repeats
+   is modelled as a content-deduped node. Content identity is also what makes a prefix claimed
+   twice a join: the same string authored on two regions is ONE node."
   {:value :string}
   (reader read-prefix))
 
-;; ── interior: a containment relation that deliberately STAYS OUT of `contains` ───────────────
-;; The obvious wiring is `(:sub :contains)`, so that `contains`, `contains+` and `within` pick
-;; interior members up for free. It is also a 116× performance regression across the whole model,
-;; and the reason is worth stating because it constrains every future species:
-;;
-;;   `contains` with ONE species is a single-bodied rule, and the compiler INLINES those into the
-;;   stored-relation datoms they stand for, re-orienting each expansion against what the preceding
-;;   clauses already bound (`cozo/query.clj`, "rule INLINING"). A second species makes it
-;;   two-bodied, the inliner leaves it as a rule call, Cozo materializes it — and a materialized
-;;   relation carries no key, so every hop through it degrades to a scan.
-;;
-;;   Measured here, on brian (904 ns / 10,069 fns / 21,477 call edges), the `ns-depends` join:
-;;     :interior OUTSIDE contains (one species) ....... 2,246 ms
-;;     :interior AS a contains species (two) ....... 260,652 ms
-;;
-;; So `:interior` is a bare relation, and Region reads its own containment through
-;; `region-contains` below. The cost is that the kernel's `within`/`contains+` do not see interior
-;; members; the benefit is that the hot genus every other vocab joins through stays inlinable.
-;; Teaching the inliner multi-bodied rules would remove the constraint — that is the real fix, and
-;; it belongs in the compiler, not in a workaround here.
-(defrelation :interior
+;; ── the two predicates membership needs ──────────────────────────────────────
+;; Each is a Clojure function AND a CozoScript lowering of it, and the function is the
+;; specification: the laws only ever run the lowering, so the two must agree, which the tests
+;; check over real namespace names rather than trusting a string template.
+
+(defn segment-prefix?
+  "True when prefix `p` claims the namespace named `n`: `n` is `p`, or lies below it at a `.`
+   boundary. A `p` ending in `.` already spells its boundary and claims only what lies below."
+  [n p]
+  (if (str/ends-with? p ".")
+    (str/starts-with? n p)
+    (or (= n p) (str/starts-with? n (str p ".")))))
+
+(defn longer?
+  "True when prefix `a` is longer than prefix `b`. Two prefixes that claim one namespace are both
+   prefixes of its name, so the longer is the more specific claim."
+  [a b]
+  (> (count a) (count b)))
+
+;; Registered at load, which is when a vocabulary's ports are expected to arrive: a registration
+;; retires any compiled rule index built before it. Each argument arrives already compiled to a
+;; CozoScript term, so a builder only splices.
+(cq/register-predicate-port!
+  `segment-prefix?
+  (fn [[n p]]
+    [(str "if(ends_with(" p ", '.'), starts_with(" n ", " p "), "
+          "or(" n " == " p ", starts_with(" n ", concat(" p ", '.'))))")
+     #{}])
+  {})
+
+(cq/register-predicate-port!
+  `longer?
+  (fn [[a b]] [(str "length(" a ") > length(" b ")") #{}])
+  {})
+
+(s/defrelation :interior
   "Membership — an interior child: contained, and HIDDEN. Nothing outside the container's own
-   subtree may depend on an interior member or anything nested in one, whatever the `:may-depend`
-   graph would otherwise allow. NOT a species of `contains` — see the note above.")
+   subtree may depend on an interior member or on anything nested in one, whatever the
+   `:may-depend` graph would otherwise allow.
+
+   NOT a species of `contains`, and the omission is deliberate rather than an oversight. The
+   obvious wiring is `(:sub :contains)`, so the genus and its closure pick interior members up for
+   free. It also makes `contains` two-bodied, and `contains` is the relation every other vocabulary
+   joins through: a multi-bodied rule is not inlined, Cozo materializes it, and a materialized
+   relation carries no key, so every hop through it degrades to a scan. Measured on brian, a
+   two-bodied `contains` in the middle of a join did not finish inside 100 s. Region therefore
+   reads its own containment through `region-contains` below, and pays for it only over regions.")
 
 (s/defrelation :region-contains
   "Region ?r holds ?c, visibly (`:child`) or not (`:interior`) — Region's own containment genus.
-   Two bodies, which is exactly what the note above says to avoid — but this relation is joined
-   only over REGIONS (fourteen of them, twenty closure rows), never over the code graph, so
-   materializing it costs nothing measurable.
+   Two bodies, which is what the note on `:interior` says to avoid — but this one is joined only
+   over REGIONS, never over the code graph, so materializing it costs nothing measurable.
 
-   ⚠ The `(is ?r ::Region)` on the `:child` body is what makes that sentence TRUE. `:child` is not
-   Region's kind — it is the kernel's, the one every structure's containment is stored under — so a
-   bare `(child ?r ?c)` is every namespace→function edge in the codebase, and `reg-within` was
-   11,044 rows on brian rather than twenty. Nothing looked wrong: every call site happened to bind
-   a Region, so every ANSWER was right. It was `declared-dep` crossing the relation with itself
-   (122M pairs) that kept both code-graph laws from finishing. `:interior` needs no pin — that kind
-   IS Region's own."
+   ⚠ The `(is ?r ::Region)` on the `:child` body is what makes that sentence true. `:child` is the
+   KERNEL's containment kind, not Region's — every structure stores containment under it — so a
+   bare `(child ?r ?c)` is every namespace→function edge in the codebase. Unpinned it made
+   `reg-within` 11,044 rows on brian rather than twenty, and `declared-dep` crossing that relation
+   with itself is 122M pairs, which is what kept both code-graph laws from finishing. No ANSWER was
+   ever wrong — every call site happened to bind a Region — which is exactly how it stayed hidden.
+   `:interior` needs no pin: that kind is Region's own."
   [?r ?c]
   [(is ?r ::Region) (child ?r ?c)]
   [(interior ?r ?c)])
 
-;; ── membership, derived from the namespace name, longest claim winning ───────
-(s/defrelation :in-region
-  "Code namespace ?ns belongs to Region ?r — ?ns's name starts with one of ?r's declared prefixes,
-   and NO region claims it by a longer prefix. The tie-break is what lets an interior be carved out
-   of the region that surrounds it: once `prep-2-execute` lands, `brian.database.execute` is claimed
-   by `Execute` even though `Persistence` claims `brian.database.` too. Specificity is compared on
-   the PREFIXES themselves — a longer claim is one that extends the shorter — so no string-length
-   primitive is needed.
-
-   The alternative is a disjointness RULE on the declaration, with a region carving an interior out
-   of its own address space by enumerating the ~43 siblings it keeps. That was tried and reverted:
-   it re-introduces exactly the drift derived membership exists to prevent, since every new
-   namespace under the parent needs the declaration edited to stay claimed.
-
-   DERIVED, and read as a plain rule call — it is a filtered generator under a negation, so the
-   compiler rightly does not inline it. Membership was for a while GROUNDED as `:region/of` datoms
-   by a Clojure-side step before `check`, on the belief that a derived membership was what kept the
-   code-graph laws from finishing. It was not (see `region-contains`): measured on brian with that
-   fixed, each law costs ~2.6 s grounded and ~3.0 s derived, the same rows either way. The 0.4 s
-   buys a model that answers `check` with no step for anyone to forget, and a vocabulary that
-   never writes to the substrate.
-
-   The negation is joined on the two ENTITIES (?ns, ?r) and rebinds ?n/?p1/?p2 from positive atoms
-   INSIDE it: a `starts_with` port filters, it cannot generate, so a head var reaching the negation
-   only through a predicate is not range-restricted and Cozo rejects the rule outright. `?p1` is
-   re-derived and re-matched rather than passed, so a region with several prefixes is judged on the
-   one that actually claims ?ns."
-  [?ns ?r]
-  [(is ?r ::Region) (prefix ?r ?px) [?px :val/value ?p]
-   (is ?ns :fukan.common.extraction.clojure.module/Ns) (named ?ns ?n)
-   [(clojure.string/starts-with? ?n ?p)]
-   (not-join [?ns ?r]
-     (named ?ns ?n1)
-     (prefix ?r ?px1) [?px1 :val/value ?p1]
-     [(clojure.string/starts-with? ?n1 ?p1)]
-     (is ?r2 ::Region) (prefix ?r2 ?px2) [?px2 :val/value ?p2]
-     [(clojure.string/starts-with? ?n1 ?p2)]
-     [(clojure.string/starts-with? ?p2 ?p1)]
-     [(not= ?p2 ?p1)])])
-
 (s/defrelation :reg-within
   "Region ?r is ?anc itself, or nested anywhere inside it. Two bodies rather than a recursion:
    `region-contains+` is the compiler's own closure, minted for the relation and injected where
-   referenced, so both containment kinds are rolled up without a hand-written recursion."
+   referenced, so both nesting kinds are rolled up without a hand-written transitive rule."
   [?r ?anc]
   [(is ?r ::Region) (is ?anc ::Region) [(= ?r ?anc)]]
   [(region-contains+ ?anc ?r)])
 
-(defstructure Region
-  "A stratum of the codebase: the namespaces under its `:prefix`es, the regions nested inside it,
-   and the regions it is allowed to depend on. The laws are the SLOT SEMANTICS of `:may-depend` and
-   `:interior` — without them both slots are prose.
+(s/defrelation :sealed-region
+  "Region ?s admits an inbound crossing only from a licensed caller. Two ways to become one, and
+   they are the same property arrived at differently: a region says `:sealed` of ITSELF, or a
+   region is held as another's `:interior`. An interior is therefore not a second mechanism — it is
+   a seal that additionally licenses its owner's subtree, which is what `seal-licensed` says."
+  [?s]
+  [(is ?s ::Region) [?s :val/sealed true]]
+  [(interior ?_owner ?s)])
 
-   `:prefix` is zero-or-more, unlike Band's one-or-more: a region that is a BOX rather than a
-   stratum claims no namespaces of its own and exists only to hold its children and carry their
-   shared name. Every law is naturally vacuous in a project that declares no Regions."
-  {:prefix     [:* RegionPrefix]  ; the namespace prefixes this region claims (a box claims none)
+(s/defrelation :seal-licensed
+  "Region ?fr may cross into sealed region ?s. Three licences, and each is a declaration someone
+   made rather than a privilege the law grants:
+
+     a DECLARED EDGE landing on ?s or inside it — the composition root's way in, and the reason
+     this law needs no notion of a privileged region;
+     the OWNER's subtree, when ?s is an interior — what makes an interior reachable from the region
+     that holds it;
+     ?s's own subtree — a region is not sealed against itself.
+
+   The first is deliberately NARROW: the edge must land on the seal or inside it. Resolving it
+   through the seal's ancestry instead lets an edge onto the OWNER license reaching the owner's
+   interior, which is the negation of what the slot means — measured, that read 0 offenders on
+   brian where the answer is 201. Joined only over regions, so three bodies cost nothing."
+  [?fr ?s]
+  [(reg-within ?fr ?fa) (may-depend ?fa ?t) (reg-within ?t ?s)]
+  [(interior ?owner ?s) (reg-within ?fr ?owner)]
+  [(reg-within ?fr ?s)])
+
+;; ── membership ───────────────────────────────────────────────────────────────
+;; Both claim relations filter on a variable their head hides, so the compiler keeps them as rules
+;; and pays each once (`inline-index`); `in-region` filters nothing and folds into its call sites.
+
+(s/defrelation :region-claims
+  "Region ?r claims namespace ?ns through its prefix ?p — ?ns is ?p or lies below it at a `.`
+   boundary. A namespace may be claimed by several regions; `in-region` settles which it is in."
+  [?ns ?r ?p]
+  [(is ?r ::Region) (prefix ?r ?px) [?px :val/value ?p]
+   (is ?ns :fukan.common.extraction.clojure.module/Ns) (named ?ns ?n)
+   [(fukan.common.vocab.code.region/segment-prefix? ?n ?p)]])
+
+(s/defrelation :region-claim-outranked
+  "The claim prefix ?p makes on namespace ?ns is outranked: a longer prefix claims ?ns too."
+  [?ns ?p]
+  [(region-claims ?ns ?_r ?p) (region-claims ?ns ?_r2 ?p2)
+   [(fukan.common.vocab.code.region/longer? ?p2 ?p)]])
+
+(s/defrelation :in-region
+  "Namespace ?ns belongs to Region ?r — the region whose claim on it no longer prefix outranks."
+  [?ns ?r]
+  [(region-claims ?ns ?r ?p) (not (region-claim-outranked ?ns ?p))])
+
+(defstructure Region
+  "A region of the codebase: the namespaces its `:prefix`es claim, the regions nested inside it,
+   and the regions those namespaces may depend on. The laws are the slot semantics of `:prefix`,
+   `:may-depend` and `:interior` — without them the declaration is prose — and every one is vacuous
+   in a project that declares no Region.
+
+   `:prefix` is zero-or-more so a BOX may claim nothing and exist only to hold what it nests."
+  {:sealed     [:? :boolean] ; admits an inbound crossing only from a licensed caller
+   :prefix     [:* NsPrefix]  ; the namespace prefixes this region claims (a box claims none)
    :child      [:* Region]    ; nested regions, visible from outside
    :interior   [:* Region]    ; nested regions, hidden from outside this region's subtree
-   :may-depend [:* Region]}   ; the regions it is allowed to depend on (declared intent)
+   :may-depend [:* Region]}   ; the regions its namespaces may depend on (declared intent)
 
   (law "every cross-region namespace dependency follows a declared :may-depend edge"
-    ;; The offender is the whole EDGE plus the two regions it crosses — Band's reasoning, kept: a
-    ;; law naming only the caller says a namespace is in the wrong without saying which of its
-    ;; dependencies is the wrong one.
+    ;; The offender is the EDGE plus the two regions it crosses, so a finding says which dependency
+    ;; to move, not only which namespace is at fault. Membership being a partition is what makes a
+    ;; row an edge: each undeclared dependency is exactly one row, so a count of rows is a count of
+    ;; the dependencies a migration has to move.
     ;;
-    ;; `declared-dep` reads the edge against the ANCESTRY of both ends, which is what containment
-    ;; buys: `Presentation :may-depend [Domain]` covers a call into `Domain/Organization` with no
-    ;; per-entity restatement, and a box region needs no edges at all.
+    ;; `declared-dep` reads the edge against the ANCESTRY of both ends, which is what nesting buys:
+    ;; one edge onto a box covers a dependency on any part of it, and a box needs no edges of its
+    ;; own. It is also the join that must stay small — see the pin note on `region-contains`.
     {:scope :global
      :offenders [?from ?to ?from-region ?to-region]
      :rules [[(declared-dep ?fr ?tr)
@@ -169,44 +219,48 @@
              [(not= ?from-region ?to-region)]
              (not (declared-dep ?from-region ?to-region))]})
 
-  (law "nothing outside an interior region's owner depends on it"
-    ;; The teeth `:may-depend` alone cannot give. An interior is reachable from inside its owner's
-    ;; subtree and nowhere else — so this fires even where the conformance law is satisfied, which
-    ;; is the point: `Domain :may-depend [Persistence]` is a legitimate edge that must still not
-    ;; reach `Execute` nested inside Persistence.
+  (law "nothing crosses into a sealed region without a licence"
+    ;; The teeth `:may-depend` alone cannot give. Conformance asks whether an edge between two
+    ;; regions was declared; a seal asks whether anything at all may reach INTO a region, and
+    ;; answers no unless something licensed it. The two are independent: `Domain :may-depend
+    ;; [Persistence]` is a perfectly good declared edge that must still not reach the connection
+    ;; sealed inside Persistence.
     ;;
-    ;; An explicit `:may-depend` edge LICENSES the crossing, and that escape is deliberate: a
-    ;; composition root is the one caller that legitimately reaches interiors, and declaring the
-    ;; edge is how it says so. Without the escape the law would need a privileged region baked in.
+    ;; ONLY THE TARGET NEED BE CLAIMED, and that asymmetry is what makes this law worth having
+    ;; before a codebase is fully declared. A crossing into a seal is a fact about what was
+    ;; REACHED, so a caller in no region at all is still an offender — where the conformance law,
+    ;; needing both ends claimed, is silent about every namespace not yet modelled. In a model
+    ;; declaring three of fourteen regions this is the law that still says something true about
+    ;; the whole codebase.
     ;;
-    ;; EXPLICIT means the edge lands ON the interior or inside it — `licensed`, not the conformance
-    ;; law's `declared-dep`. That one reads the TARGET against its ancestry, which is right for
-    ;; conformance and exactly wrong here: Execute's ancestry includes Persistence, so
-    ;; `Domain :may-depend [Persistence]` licensed the very reach the first paragraph forbids, and
-    ;; the law reported nothing. The CALLER's side still reads ancestry — a licence held by a box
-    ;; covers what the box holds.
-    ;;
-    ;; Only the TARGET need be claimed. An unclaimed caller is outside the owner's subtree by
-    ;; construction and holds no licence, so both of its tests are negations over its membership
-    ;; rather than a positive `in-region` — which is why the row carries no `?from-region`: most
-    ;; offenders in a partial model have none. On brian's three-region model that is the whole
-    ;; finding: 200 namespaces reach Execute, 197 by call and 3 only by a `defmethod` on a
-    ;; multimethod Execute owns — the supply half of `ns-depends`, which no call edge carries.
+    ;; INNERMOST ATTRIBUTION. Seals nest, so one edge can breach several — on brian, 148 crossings
+    ;; breach the connection's seal and the surrounding region's alike. Each is a true sentence and
+    ;; together they are a worklist that double-counts, so an edge is reported against the tightest
+    ;; seal it breaches and suppressed against the ones outside it. `breach` is a rule precisely so
+    ;; the suppression can ask the same question of an inner seal rather than restate it; it
+    ;; filters on a variable its head hides, so the compiler keeps it as a rule and pays it once.
+    ;; Suppression is by BREACH, never by mere nesting: a caller licensed onto the outer region but
+    ;; not the inner one still breaches the inner seal, and an outer seal it does not breach was
+    ;; never going to report it.
     {:scope :global
-     :offenders [?from ?to ?interior]
-     :rules [[(licensed ?fr ?i)
-              (reg-within ?fr ?fa) (may-depend ?fa ?t) (reg-within ?t ?i)]]
-     :where [(ns-depends ?from ?to)
-             (in-region ?to ?to-region)
-             (interior ?owner ?interior) (reg-within ?to-region ?interior)
-             (not-join [?from ?owner] (in-region ?from ?fr) (reg-within ?fr ?owner))
-             (not-join [?from ?interior] (in-region ?from ?fr) (licensed ?fr ?interior))]})
+     :offenders [?from ?to ?seal]
+     :rules [[(breach ?from ?to ?tr ?s)
+              ;; the EDGE rides inside the rule rather than being joined to it outside. `?from`
+              ;; reaches the body only through a negation otherwise, and a symbol occurring solely
+              ;; in a negated position is not range-restricted — Cozo rejects the rule head.
+              (ns-depends ?from ?to) (in-region ?to ?tr)
+              (sealed-region ?s) (reg-within ?tr ?s)
+              (not-join [?from ?s] (in-region ?from ?fr) (seal-licensed ?fr ?s))]]
+     :where [(breach ?from ?to ?to-region ?seal)
+             (not-join [?from ?to ?to-region ?seal]
+               (breach ?from ?to ?to-region ?inner)
+               (reg-within ?inner ?seal) [(not= ?inner ?seal)])]})
 
   (law "every namespace belongs to a region, once any region is declared"
-    ;; Band's reasoning verbatim, and it matters more here: `in-region` is derived, so a namespace
-    ;; under no prefix is not an offender anywhere — it is INVISIBLE: conformance needs both ends
-    ;; claimed to fire, and the interior law needs the target. Gated on a Region existing, because a project declaring none is
-    ;; asserting nothing about coverage, while one declaring any is asserting a partition.
+    ;; Without it the declaration is opt-in: a namespace no prefix claims is in no region, the
+    ;; cross-region law needs both ends in one, and so an unclaimed package depends on anything and
+    ;; is depended on by anything while the model stays green. GATED on a Region existing, because a
+    ;; project that declares none asserts nothing about coverage.
     {:scope :global
      :offenders [?ns]
      :rules [[(some-region ?r) (is ?r ::Region)]]
@@ -214,22 +268,31 @@
              (is ?ns :fukan.common.extraction.clojure.module/Ns)
              (not-join [?ns] (in-region ?ns ?r))]})
 
+  (law "a namespace prefix is claimed by at most one region"
+    ;; The half of the partition longest-wins cannot settle: two claims on one namespace tie only
+    ;; when they are the same string, no rule can prefer either region, and the namespace would
+    ;; sit in both. Ordered by name so one conflict is one finding.
+    {:scope :global
+     :offenders [?r1 ?r2 ?p]
+     :where [(is ?r1 ::Region) (prefix ?r1 ?px) (prefix ?r2 ?px) (is ?r2 ::Region)
+             (named ?r1 ?n1) (named ?r2 ?n2) [(< ?n1 ?n2)]
+             [?px :val/value ?p]]})
+
   (law "every region with a prefix claims at least one namespace"
-    ;; A prefix that matches nothing — a typo, or a package that moved out from under the claim.
-    ;; The code-graph laws read `in-region`, so a region claiming nothing reports NO violations,
-    ;; and a silent pass is the one outcome this vocabulary must never produce. A region whose every
-    ;; namespace is out-claimed by a longer prefix lands here too, which is the same finding.
-    ;; Gated on a namespace existing, so a design-only build stays vacuous rather than reporting
-    ;; every region for the absence of code that was never extracted.
+    ;; A prefix matching nothing is a typo, or a package that moved out from under the claim while
+    ;; the declaration stayed put. Neither shows up anywhere else: membership is derived, so an
+    ;; empty region simply never appears on either side of any edge, and every other law stays
+    ;; green. Gated on a namespace existing, so a design-only build reports nothing rather than
+    ;; reporting every region for the absence of code that was never extracted.
     {:scope :global
      :offenders [?r]
      :rules [[(some-ns ?ns) (is ?ns :fukan.common.extraction.clojure.module/Ns)]]
      :where [(some-ns ?_ns)
              (is ?r ::Region) (prefix ?r ?_px)
-             (not-join [?r] (in-region ?_ns2 ?r))]})
+             (not-join [?r] (in-region ?ns2 ?r))]})
 
-  (law "the :may-depend graph is acyclic — no region transitively depends on itself"
+  (law "the :may-depend graph is acyclic — no region can reach itself"
     {:offenders [?region]
-     :rules [[(reg-reaches ?s ?t) (may-depend ?s ?t)]
-             [(reg-reaches ?s ?t) (may-depend ?s ?mid) (reg-reaches ?mid ?t)]]
-     :where [(reg-reaches ?region ?region)]}))
+     :rules [[(region-reaches ?s ?t) (may-depend ?s ?t)]
+             [(region-reaches ?s ?t) (may-depend ?s ?mid) (region-reaches ?mid ?t)]]
+     :where [(region-reaches ?region ?region)]}))

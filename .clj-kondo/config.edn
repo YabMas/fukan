@@ -62,6 +62,9 @@
   fukan.common.vocab.code.subsystem
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  fukan.common.vocab.code.band
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   fukan.common.vocab.code.stratum
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -136,11 +139,7 @@
              :unused-referred-var {:level :off}}}
   fukan.canvas.projection.instance-test
   {:linters {:unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  ;; dev/user.clj `:refer`s the cockpit's read commands so they're typeable unqualified
-  ;; at the REPL prompt — none are called from the file itself.
-  user
-  {:linters {:unused-referred-var {:level :off}}}}
+             :unused-referred-var {:level :off}}}}
 
  :linters
  {;; The canvas DSL's structural clause syntax confuses clj-kondo's `when` body check.
