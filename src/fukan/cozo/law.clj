@@ -129,8 +129,10 @@
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   check-structural
   "Run every law over the Cozo db `cdb`, returning `[{:structure :law :offenders}]` (offenders
-   = matched eid tuples, native handles) for laws that fire, `{:structure :law :unsupported true}`
-   for laws whose form (or a vocab rule they read) isn't compiled yet, and
+   = matched eid tuples, native handles) for laws that fire, `{:structure :law :unsupported true
+   :stage :reason}` for laws whose form (or a vocab rule they read) isn't compiled yet — `:stage`
+   says whether the COMPILER refused it or Cozo did, `:reason` is that refusal's own message,
+   because a flag with no cause sends the reader off to call `compile-law` by hand — and
    `{:structure :law :over-budget true}` for one that outran `*law-budget-ms*`. A type-check law
    runs the hybrid (`value-offenders`); everything else compiles to CozoScript and runs.
 
@@ -154,17 +156,20 @@
                  (fired tag law offs)))
 
              :else
-             (let [program (try (binding [query/*attr-buckets* buckets]
-                                  (compile-law law index))
-                                (catch clojure.lang.ExceptionInfo _ ::unsupported))]
-               (if (= program ::unsupported)
-                 {:structure tag :law (:desc law) :unsupported true}
+             (let [unsupported (fn [stage e]
+                                 {:structure tag :law (:desc law) :unsupported true
+                                  :stage stage :reason (ex-message e)})
+                   program     (try (binding [query/*attr-buckets* buckets]
+                                      (compile-law law index))
+                                    (catch clojure.lang.ExceptionInfo e (unsupported :compile e)))]
+               (if (map? program)
+                 program
                  (let [rows (try (bounded #(db/q cdb program))
-                                 (catch clojure.lang.ExceptionInfo _ ::unsupported))]
-                   (case rows
-                     ::unsupported {:structure tag :law (:desc law) :unsupported true}
-                     ::over-budget {:structure tag :law (:desc law) :over-budget true}
-                     (fired tag law rows))))))))))
+                                 (catch clojure.lang.ExceptionInfo e (unsupported :evaluate e)))]
+                   (cond
+                     (map? rows)            rows
+                     (= rows ::over-budget) {:structure tag :law (:desc law) :over-budget true}
+                     :else                  (fired tag law rows))))))))))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   check
@@ -187,7 +192,11 @@
                            " law(s) could not be evaluated"
                            (when-let [over (seq (filter :over-budget undecided))]
                              (str " — " (count over) " over the " *law-budget-ms*
-                                  "ms per-law budget")))
+                                  "ms per-law budget"))
+                           (apply str (for [{:keys [structure law stage reason]} undecided
+                                            :when reason]
+                                        (str "\n  " structure " — " (pr-str law)
+                                             " (" (name stage) "): " reason))))
                       {:unsupported undecided})))
     ;; sorted by (structure, description) — the pair that identifies a law across runs, since
     ;; `:key` is optional and most laws carry none. Registry order is an accident of how the
