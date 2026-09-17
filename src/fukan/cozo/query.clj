@@ -734,19 +734,26 @@
     [(distinct (concat vocab-lines rule-lines extra)) body]))
 
 (def ^:private attr-bucket-cache
-  "Caches `attr-buckets` per db handle (compared by `identical?`) — the index is read once per
-   build, not once per query."
+  "Caches `attr-buckets` per db handle (compared by `identical?`) AND write generation — the index
+   is read once per state of the db, not once per query.
+
+   The generation is not optional. A handle keeps its identity across `mirror/insert-datoms`, and
+   an index that predates a write is not merely slow. An attribute it has never seen falls back to
+   the three-way union, which is correct; an attribute it files under ONE bucket, then written at
+   another type, compiles to a read of the old bucket alone — the new datoms are silently absent
+   from every answer."
   (atom nil))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   buckets-of
-  "`attr-buckets` for `cdb`, memoized on the db handle."
+  "`attr-buckets` for `cdb`, memoized on the db handle and `db/write-generation`."
   [cdb]
-  (let [c @attr-bucket-cache]
-    (if (and c (identical? (:db c) cdb))
+  (let [c   @attr-bucket-cache
+        gen (db/write-generation)]
+    (if (and c (identical? (:db c) cdb) (= gen (:gen c)))
       (:idx c)
       (let [idx (attr-buckets cdb)]
-        (reset! attr-bucket-cache {:db cdb :idx idx})
+        (reset! attr-bucket-cache {:db cdb :gen gen :idx idx})
         idx))))
 
 ;; ── the general query runner ──────────────────────────────────────────────────

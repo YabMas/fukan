@@ -20,5 +20,11 @@
     ;; optional parameter rather than two, and `[:? …]` says exactly that: the regex matches 2 or
     ;; 3 arguments. Declaring only the shorter arity, as this did until 2026-08-29, hid one.
     {:signature [:=> [:catn [:db CozoDb] [:script :string] [:params [:? :map]]] [:vector :any]]})
+  (Operation write-generation "A counter that moves whenever an already-open db is written to — what a memo over a db's contents keys on beside the handle, which keeps its identity across writes."
+    {:signature [:=> [:cat] :int]
+     :performs  [:state]})                   ; reads the write counter
+  (Operation wrote! "Announce a write to an already-open db; the substrate's one write path calls it."
+    {:signature [:=> [:cat] :nil]
+     :performs  [:state]})                   ; bumps it
   (Operation with-db "Open a db, call (f db), and close it even on throw; returns f's value."
     {:signature [:=> [:catn [:f [:=> [:catn [:db CozoDb]] :any]]] :any]}))

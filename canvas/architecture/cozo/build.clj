@@ -38,12 +38,13 @@
   (Operation with-grammar
     "Reflect the model's grammar into an already-built Cozo db: query the structure tags, reflect → node/rel maps, UPSERT by :entity/id (reuse the eid of a ^:value Schema shared with the model), and insert the datoms. Returns the db."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:extra-seeds :any]] db/CozoDb]
-     :performs  [:throws]                          ; grammar/reflect throws on a dangling grammar ref
+     :performs  [:throws :state]                   ; grammar/reflect throws on a dangling grammar ref;
+                                                   ; insert-datoms announces its write
      :delegates [db/q cmirror/insert-datoms reflect/reflect]})
   (Operation model->cozo
     "Native FULL build: canvas instance-vars + extraction {:roots :ground} facts → one native Cozo substrate with the extractor's post-build :ground hook run (it grounds the :calls graph) and the grammar reflected. Assembling all roots in one pass resolves cross-refs without a merge."
     {:signature [:=> [:catn [:ns-syms [:vector :symbol]] [:facts :map]] db/CozoDb]
-     :performs  [:throws]
+     :performs  [:throws :state]
      ;; NB not db/q: model->cozo reaches `q` only THROUGH load-datoms/with-grammar (which delegate to it),
      ;; never directly — so declaring it here is a transitive-through-public over-declaration (the roll-up
      ;; `delegates :sub` flags it: a public boundary is where one delegation ends and the next begins).

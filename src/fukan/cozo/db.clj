@@ -30,6 +30,31 @@
   ([db script params]
    (:rows (cozo/query db script params))))
 
+(def ^:private writes
+  "Bumped by every write to an already-open db — see `write-generation`."
+  (atom 0))
+
+(defn ^{:malli/schema [:=> [:cat] :int]}
+  write-generation
+  "A counter that moves whenever an ALREADY-OPEN db is written to. A db handle is mutable and
+   keeps its identity across writes, so anything memoized per handle over the db's CONTENTS
+   (`query/buckets-of`) keys on the handle AND this — the handle alone says which db, not which
+   state of it.
+
+   One counter for every handle rather than one per handle: the only consumer holds a single
+   entry, so a write to some other db costs it at most one recompute, and a per-handle table
+   would have to hold the handles it is meant to let go of."
+  []
+  @writes)
+
+(defn ^{:malli/schema [:=> [:cat] :nil]}
+  wrote!
+  "Announce a write to an already-open db (`write-generation`). The substrate's one write path
+   (`mirror/insert-datoms`) calls it; a fresh load needs none, because it makes a fresh handle."
+  []
+  (swap! writes inc)
+  nil)
+
 (defn ^{:malli/schema [:=> [:cat [:=> [:catn [:db :CozoDb]] :any]] :any]}
   with-db
   "Open a db, call `(f db)`, and close the db (even on throw). Returns f's value."
