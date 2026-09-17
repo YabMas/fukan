@@ -49,6 +49,12 @@
   ;; `-M` (base :paths only) would miss it and flag false positives on defstructure bodies.
   :lint {:extra-paths ["."]
          :main-opts ["-m" "clj-kondo.main"]}
+  ;; Phase-1 status report for brian's region model — driven from brian's own `.fukan/` shim,
+  ;; which is where a consuming project keeps its entry points. The implementation lives here
+  ;; because it reads fukan's laws; `dev` brings clj-reload, which `fukan.repl/go` initialises.
+  :report {:extra-paths ["." "dev"]
+           :extra-deps {io.github.tonsky/clj-reload {:mvn/version "0.7.1"}}
+           :main-opts ["-m" "phase-1-report"]}
   :nrepl {:extra-paths ["." "dev"]
           :jvm-opts ["-Dclj-reload.auto-init=false"]
           :extra-deps {nrepl/nrepl       {:mvn/version "1.3.0"}
