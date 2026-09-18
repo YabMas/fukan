@@ -174,12 +174,14 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
 
 - `common/fukan/common/vocab/grouping.clj` — `Grouping` (the most abstract membership primitive) +
   `Connected` (a flow-node facet). The structural primitives the rest builds on.
-- `common/fukan/common/vocab/code/{kind,effect,operation,module,subsystem,band}.clj` — the code
-  grammar (Kind / Effect / Operation / Module / Subsystem / Band). **PURE DESIGN — language-neutral**,
-  with ONE stated exception: `band` names the Clojure `Ns` sort (by full tag keyword, the documented
-  spelling for a deliberate non-require), because a Band's whole point is that its evidence is the
-  EXTRACTED call graph. A non-Clojure project gets vacuous laws rather than a load error; the honest
-  fix is an extractor-neutral code-unit sort, and a second extractor is the trigger to build one. Each element
+- `common/fukan/common/vocab/code/{kind,effect,operation,module,subsystem,band,stratum}.clj` — the
+  code grammar (Kind / Effect / Operation / Module / Subsystem / Band / Stratum). **PURE DESIGN —
+  language-neutral**, with ONE stated exception, carried by two elements: `band` names the Clojure
+  `Ns` sort, and `stratum` reads `ns-depends` and the `Module ↦ Ns` pairing (both by name, the
+  documented spelling for a deliberate non-require), because each one's whole point is that its
+  evidence is the EXTRACTED call graph. A non-Clojure project gets vacuous laws rather than a load
+  error; the honest fix is an extractor-neutral code-unit sort, and a second extractor is the trigger
+  to build one. Each element
   file carries its structure and the laws that are its own slot semantics, and knows nothing about
   what language the code is written in.
 - `common/fukan/common/vocab/patterns/plug_point.clj` — the PATTERN TIER: `PlugPoint`, one rung above
@@ -318,6 +320,15 @@ and the gate is what the rule MEANS rather than politeness to non-adopters: a pr
 bands asserts no partition, while one declaring a band asserts a partition, and a partition with a
 hole in it is exactly the blindness the law exists to close (an unbanded package is an offender
 NOWHERE — the cross-band law needs both ends banded before it fires).
+
+`Stratum` is the third grouping, and the one on the VERTICAL axis: a level in the sense of stratified
+design, the authored Modules (`:provided-by`) whose vocabulary the strata resting on it (`:rests-on`)
+are written in. It takes Band's evidence (`ns-depends`, reached through the `Module ↦ Ns` pairing) and
+Subsystem's authored membership, but it RELATES its Modules rather than owning them, so it never
+competes with a Module's home. Two choices are the point of it: only a DIRECT `:rests-on` edge licenses
+a dependency, so reaching past a level is declared or it is a violation; and there is NO coverage law,
+because a stratum is declared where someone has read an area's levels — a module in no stratum is
+unread, not wrong.
 
 The grouping ladder is a TREE, not a chain: `Grouping` (bare membership, `:child [:* Any]`) is
 refined by two siblings that narrow the member sort — `Module` (a code namespace: a Grouping over

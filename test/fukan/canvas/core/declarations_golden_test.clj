@@ -28,6 +28,7 @@
             ;; because the counts did not move in between, and a golden that is only correct
             ;; when other tests run first is not guarding what it claims to guard.
             [fukan.common.vocab.code.band]
+            [fukan.common.vocab.code.stratum]
             ;; …the pattern tier too: since the dependency inversion (the pattern names its
             ;; participants, the core never names the pattern — 2026-07-21) NO vocab ns requires it,
             ;; so only an explicit require keeps its 7 terms + 4 laws in the snapshot (the same
@@ -459,8 +460,15 @@
 ;; `:may-depend` conformance, which is the point of declaring one. Terms 146 (+2), one rule each.
 ;; Laws hold at 79 — a defrelation declares no denial, and the architecture laws read the relation
 ;; by name, so they widen without moving.
-(def ^:private golden-terms {:count 146 :hash 791417815})
-(def ^:private golden-laws  {:count 79 :hash 1533973671})
+;; 2026-09-18: `Stratum` ships (fukan.common.vocab.code.stratum) — a LEVEL of the code in the sense
+;; of stratified design: authored Modules that provide a vocabulary, and the strata it is written in.
+;; Terms 146→153 (+7): the Stratum kind rule, and the `provided-by` and `rests-on` slot rules, each
+;; with its compiler-minted closure pair. Laws 79→85 (+6): three GENERATED (provided-by target-type
+;; + at-least-one, rests-on target-type) and three AUTHORED (conformance of cross-stratum
+;; dependencies to a DIRECT :rests-on edge, one stratum per module, acyclicity). No coverage law, so
+;; nothing here fires for a project that declares no stratum.
+(def ^:private golden-terms {:count 153 :hash -1886749655})
+(def ^:private golden-laws  {:count 85 :hash 2080344892})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

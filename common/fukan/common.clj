@@ -13,6 +13,7 @@
             [fukan.common.vocab.code.module]
             [fukan.common.vocab.code.subsystem]
             [fukan.common.vocab.code.band]
+            [fukan.common.vocab.code.stratum]
             [fukan.common.vocab.patterns.plug-point]
             [fukan.common.vocab.patterns.fulfilment]
             [fukan.common.typing.malli]
