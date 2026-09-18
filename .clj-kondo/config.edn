@@ -62,6 +62,9 @@
   fukan.common.vocab.code.subsystem
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  fukan.common.vocab.code.stratum
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   ;; the Clojure extraction plugins now declare the Fn/Ns codomain `defstructure`s, whose slot-target
   ;; symbols (Schema/Fn) are used only inside clause bodies the instance hook drops — false positives.
   fukan.common.extraction.clojure.operation
