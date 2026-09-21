@@ -187,12 +187,12 @@
 (clj-module/Ns ^{:name "app.other.x"}        s-ns-out  {:child [s-out-fn]})
 (clj-module/Ns ^{:name "app.other.y"}        s-ns-out2 {:child [s-out2-fn]})
 
-(declare s-execute s-persistence)
 (region/Region ^{:name "SExecute"}     s-execute     {:prefix ["app.db.execute"]})
-(region/Region ^{:name "SPersistence"} s-persistence {:prefix     ["app.db"]
-                                                     :sealed     true
-                                                     :interior   [s-execute]
-                                                     :may-depend [s-execute]})
+;; no `:may-depend [s-execute]`: containment licenses the owner's reach into what it holds, and
+;; declaring it as well is the redundancy the hygiene law reports.
+(region/Region ^{:name "SPersistence"} s-persistence {:prefix   ["app.db"]
+                                                     :sealed   true
+                                                     :interior [s-execute]})
 (region/Region ^{:name "SDomain"}      s-domain      {:prefix ["app.dom"]
                                                      :may-depend [s-persistence]})
 
@@ -235,3 +235,64 @@
   ;; law is vacuous over a model where no region seals and none is anybody's interior.
   (let [db (build/vars->cozo (into fact-vars region-vars))]
     (is (empty? (offenders db "sealed region")))))
+
+;; ── containment implies reach, downward and only downward ────────────────────
+;; A whole that may not touch its own parts describes nothing anybody builds, so a region reaches
+;; what it contains without declaring an edge onto it. The converse is an ordinary crossing: a part
+;; reaching its container is declared or it is reported. Before this, fukan's two code-graph laws
+;; disagreed — `seal-licensed` licensed the owner's subtree into its interior while `declared-dep`
+;; denied the same edge — and the disagreement was paid by the author, in a `:may-depend` line
+;; written to silence it (55 rows on brian).
+
+(declare c-inner-fn c-outer-fn)
+(clj-op/Fn ^{:name "c-inner-fn"} c-inner-fn {:calls [c-outer-fn]})  ; the part reaching its whole
+(clj-op/Fn ^{:name "c-outer-fn"} c-outer-fn {:calls [c-inner-fn]})  ; the whole reaching its part
+
+(clj-module/Ns ^{:name "app.pack.core"}      c-ns-outer {:child [c-outer-fn]})
+(clj-module/Ns ^{:name "app.pack.part.impl"} c-ns-inner {:child [c-inner-fn]})
+
+(region/Region ^{:name "CPart"}  c-part  {:prefix ["app.pack.part"]})
+(region/Region ^{:name "CWhole"} c-whole {:prefix ["app.pack"] :child [c-part]})
+
+(deftest a-region-reaches-what-it-contains-and-not-the-other-way
+  (testing "the whole's call into its part follows from containment; the part's call back up is a
+            crossing like any other, and stays reported until somebody declares it"
+    (let [db (build/vars->cozo [#'c-inner-fn #'c-outer-fn #'c-ns-outer #'c-ns-inner
+                                #'c-part #'c-whole])]
+      (is (= #{["app.pack.part.impl" "app.pack.core" "CPart" "CWhole"]}
+             (offenders db "cross-region"))))))
+
+;; ── the corollary: an edge containment already licenses says nothing ─────────
+;; Which matters because containment ARRIVED LATE. Every canvas authored while the laws disagreed
+;; wrote that edge as a workaround, and without a law saying so the workaround outlives the bug in
+;; every file that needed it.
+
+(region/Region ^{:name "HPart"}  h-part  {:prefix ["app.hp.part"]})
+(region/Region ^{:name "HWhole"} h-whole {:prefix ["app.hp"] :child [h-part] :may-depend [h-part]})
+
+(deftest an-edge-containment-already-licenses-is-reported
+  (testing "one finding naming both ends, whose fix is deleting one line"
+    (let [db (build/vars->cozo [#'h-part #'h-whole])]
+      (is (= #{["HWhole" "HPart"]} (offenders db "already contains"))))))
+
+;; the same shape with the member SEALED, where the edge is the opposite of redundant
+(declare hs-core-fn hs-part-fn)
+(clj-op/Fn ^{:name "hs-part-fn"} hs-part-fn)
+(clj-op/Fn ^{:name "hs-core-fn"} hs-core-fn {:calls [hs-part-fn]})
+
+(clj-module/Ns ^{:name "app.hs.core"}      hs-ns-core {:child [hs-core-fn]})
+(clj-module/Ns ^{:name "app.hs.part.impl"} hs-ns-part {:child [hs-part-fn]})
+
+(region/Region ^{:name "HSealed"} h-sealed {:prefix ["app.hs.part"] :sealed true})
+(region/Region ^{:name "HOwner"}  h-owner  {:prefix ["app.hs"] :child [h-sealed] :may-depend [h-sealed]})
+
+(deftest an-edge-a-seal-needs-is-not-redundant
+  (testing "a sealed member admits a crossing only from a caller something licensed, and for its
+            own container that licence IS this edge — so it is doing work, and deleting it would
+            turn every owner→member crossing into a breach. `:child` + `:sealed` is how an author
+            demands the owner's reach be stated rather than implied."
+    (let [db (build/vars->cozo [#'hs-core-fn #'hs-part-fn #'hs-ns-core #'hs-ns-part
+                                #'h-sealed #'h-owner])]
+      (is (empty? (offenders db "already contains")))
+      (is (empty? (offenders db "sealed region"))
+          "the owner's crossing into the sealed member is licensed by the edge"))))
