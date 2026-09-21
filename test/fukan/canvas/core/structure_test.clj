@@ -768,3 +768,30 @@
       (let [msg (root-message #(load-spec "(fukan.canvas.core.structure-test/sh-Op write! {})\n" n))]
         (is (re-find #"already refers to" msg))
         (is (not (re-find #"already authored" msg)))))))
+
+;; ── nesting routes by target type, and only by target type ───────────────────
+;; Which is enough while a container relates each sort once. Where it relates one sort twice —
+;; `Region` holds a Region as `:child`, as `:interior` and as `:may-depend` — the type says which
+;; slots are legal and cannot say which was meant. Answering with the first is not the arbitrary
+;; choice but the dangerous one: nesting a Region inside a Region reads as the containment the
+;; author drew, lands in `:child`, and the seal they believed they had declared reports nothing
+;; while every law over the model stays green.
+
+(defstructure rt-Part "Routing fixture: a member two slots admit." {:note [:? :string]})
+(defstructure rt-Whole "Routing fixture: a container relating one sort twice."
+  {:child  [:* rt-Part]
+   :hidden [:* rt-Part]})
+
+(deftest a-nested-instance-two-slots-admit-is-refused
+  (testing "the message names both slots and the one-line cure, because the author has to pick"
+    (let [msg (root-message
+               #(load-spec (str "(fukan.canvas.core.structure-test/rt-Whole whole {}\n"
+                                "  (fukan.canvas.core.structure-test/rt-Part part {}))\n")))]
+      (is (re-find #"could route to :child, :hidden" msg))
+      (is (re-find #"name it in the slot you mean" msg)))))
+
+(deftest a-sort-a-container-relates-once-still-nests
+  (testing "the refusal is about ambiguity alone — unambiguous nesting is untouched"
+    (is (nil? (root-message
+               #(load-spec (str "(fukan.canvas.core.structure-test/sh-Mod owner {}\n"
+                                "  (fukan.canvas.core.structure-test/sh-Op member {}))\n")))))))

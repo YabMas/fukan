@@ -617,15 +617,31 @@
        (structure-by-tag (resolve-struct-tag (first f)))))
 
 (defn- route-slot
-  "Which slot a nested instance of `kid-tag` routes to in `sdef`: the slot whose target IS that
-   tag — or whose union of alternatives (`:alts`) admits it — unless `private?`, then the
-   `Any`-targeting fallback (the internal :child slot)."
-  [sdef kid-tag private?]
+  "Which slot a nested instance `kid` routes to in `sdef`: the slot whose target IS its tag — or
+   whose union of alternatives (`:alts`) admits it — unless the instance is `:private?`, then the
+   `Any`-targeting fallback (the internal :child slot).
+
+   TWO SLOTS ADMITTING ONE TAG IS REFUSED, because nesting routes by TARGET TYPE and nothing else:
+   where a structure relates itself twice (`Region` holds a Region as `:child`, as `:interior` and
+   as `:may-depend`) the type says which slots are legal and cannot say which was meant. Taking the
+   first is the dangerous answer rather than the arbitrary one — nesting a Region inside a Region
+   reads as the containment the author drew, lands in `:child`, and a seal the author believed they
+   had declared reports nothing while every law over the model stays green. The cure is one line
+   longer and unambiguous: author the member as its own top-level instance and name it in the slot
+   you mean."
+  [sdef {:keys [tag sym private?]}]
   (or (when-not private?
-        (some #(when (or (= (:target %) kid-tag)
-                         (some #{kid-tag} (:alts %)))
-                 (:rel %))
-              (:slots sdef)))
+        (let [admit (filter #(or (= (:target %) tag) (some #{tag} (:alts %))) (:slots sdef))]
+          (when (next admit)
+            (throw (ex-info
+                    (str (name (:tag sdef)) ": the nested instance `" sym "` could route to "
+                         (str/join ", " (map #(str (:rel %)) admit))
+                         " — each admits a " (name tag) ", and nesting routes by target type "
+                         "alone, so which one was meant is not written down anywhere. Author `"
+                         sym "` as its own top-level instance and name it in the slot you mean.")
+                    {:tag (:tag sdef) :nested sym :nested-tag tag
+                     :slots (mapv :rel admit)})))
+          (:rel (first admit))))
       (some #(when (= (:target %) :Any) (:rel %)) (:slots sdef))))
 
 (def ^:private instance-line-key
@@ -716,7 +732,7 @@
                                     :private? (boolean (:private (meta (second nf)))))) nests)
         syms  (claim-distinct-names! tag sym (conj (vec (mapcat :syms kids)) sym))
         routed (->> kids
-                    (group-by #(route-slot sdef (:tag %) (:private? %)))
+                    (group-by #(route-slot sdef %))
                     (map (fn [[rel ks]] (cons (symbol (name rel)) (map :sym ks)))))
         clauses (concat (map->clauses tag sdef m) routed)
         value   (build-instance-form tag (or (:name (meta sym)) (name sym)) doc false clauses)]
