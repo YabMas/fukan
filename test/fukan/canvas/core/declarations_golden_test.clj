@@ -495,8 +495,13 @@
 ;; 2026-09-21: Region and Stratum meet. They were developed on separate branches over the same base
 ;; and touch no common term, so the counts add: Region's 172/90 plus Stratum's +7/+6. The hashes are
 ;; recomputed, not derived — they are order-sensitive over the whole term set.
+;; 2026-09-21 (later): CONTAINMENT IMPLIES REACH. A region reaches what it contains, so
+;; `declared-dep` gains a body and the `:may-depend` line every canvas wrote to say so becomes a
+;; no-op — which the new law `no :may-depend edge names a region the same declaration already
+;; contains` reports, once, so the workaround does not outlive the bug. Laws 96→97 (+1, AUTHORED).
+;; Terms unchanged: both rule sets are law-local, like `breach`, and mint no term.
 (def ^:private golden-terms {:count 179 :hash 1174249065})
-(def ^:private golden-laws  {:count 96 :hash -1038484490})
+(def ^:private golden-laws  {:count 97 :hash 9061353})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

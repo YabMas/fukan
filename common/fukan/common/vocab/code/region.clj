@@ -29,6 +29,24 @@
    that share a name and nothing else — and an outward edge onto the box covers what it holds
    without restating it against each part. `:interior` holds one that is NOT visible.
 
+   CONTAINMENT IMPLIES REACH, DOWNWARD AND ONLY DOWNWARD. A region reaches what it contains without
+   declaring an edge onto it: a whole that may not touch its own parts describes nothing anybody
+   builds, and the alternative was a `:may-depend` line every author has to write whose only
+   purpose is to not be a bug (55 findings on brian, all of Persistence reaching the connection it
+   owns). The converse never holds — a part reaching its container, or a sibling, is an ordinary
+   crossing and is declared or reported. A `:may-depend` edge that containment already licenses is
+   a law of its own below, so the line can be deleted once rather than kept forever as a no-op.
+
+   That leaves three rungs, and an author picks by what they want checked:
+
+     `:child`              contained; the owner reaches it, an edge onto the box covers it
+     `:child` + `:sealed`  contained; every inbound crossing declared onto it, the owner's included
+     `:interior`           contained and hidden; the owner's subtree, plus edges landing on it
+
+   The middle rung is the one to reach for when the owner's reach should be STATED rather than
+   implied — the seal is what makes the owner declare an edge, and containment stops that
+   declaration from being redundant.
+
    SEALING is what `:interior` turns out to be a case of. A region says `:sealed` of itself to admit
    an inbound crossing only from a caller something licensed; a region held as another's `:interior`
    is sealed too, and additionally licenses its owner's subtree. One law covers both. That is the
@@ -210,14 +228,56 @@
     ;; `declared-dep` reads the edge against the ANCESTRY of both ends, which is what nesting buys:
     ;; one edge onto a box covers a dependency on any part of it, and a box needs no edges of its
     ;; own. It is also the join that must stay small — see the pin note on `region-contains`.
+    ;;
+    ;; The second body is CONTAINMENT, and it is the sentence the seal law was already saying: a
+    ;; region reaches what it holds. Without it the two laws disagree about what ownership means —
+    ;; `seal-licensed` licenses the owner's subtree into its interior while this law denies the
+    ;; same edge — and the disagreement is paid by the author, in a `:may-depend` line whose only
+    ;; job is to silence it. It licenses the CONTAINER only: `?fr` must hold `?tr`, so a part
+    ;; reaching its container, or a sibling, is an ordinary crossing and stays reported. A seal
+    ;; overrides it, which is what makes `:child` + `:sealed` the way to demand a stated edge.
     {:scope :global
      :offenders [?from ?to ?from-region ?to-region]
      :rules [[(declared-dep ?fr ?tr)
-              (reg-within ?fr ?fa) (reg-within ?tr ?ta) (may-depend ?fa ?ta)]]
+              (reg-within ?fr ?fa) (reg-within ?tr ?ta) (may-depend ?fa ?ta)]
+             [(declared-dep ?fr ?tr) (region-contains+ ?fr ?tr)]]
      :where [(ns-depends ?from ?to)
              (in-region ?from ?from-region) (in-region ?to ?to-region)
              [(not= ?from-region ?to-region)]
              (not (declared-dep ?from-region ?to-region))]})
+
+  (law "no :may-depend edge names a region the same declaration already contains"
+    ;; The corollary of the containment body above, and the reason it can be landed safely. The
+    ;; edge is already licensed, so the line does nothing — and a line that does nothing is
+    ;; indistinguishable from a load-bearing one to the next reader.
+    ;;
+    ;; It exists because containment ARRIVED LATE. Every canvas authored while the two laws
+    ;; disagreed wrote this edge to silence the disagreement; without a law saying so, the
+    ;; workaround outlives the bug in every file that needed it, and nothing will ever find it
+    ;; again. One finding, one deletion, and it can never fire on a model authored after today
+    ;; except by a genuine mistake.
+    ;;
+    ;; Narrow on purpose: only a container naming what it holds. A region naming a sibling, or
+    ;; naming its own container, is an ordinary declared edge and is not reported here.
+    ;;
+    ;; AND ONLY WHEN THE EDGE DOES NO WORK FOR A SEAL EITHER, which is the whole difference
+    ;; between the middle rung of the ladder and the bottom one. A `:child` + `:sealed` member
+    ;; admits a crossing only from a caller something licensed, and for its own container that
+    ;; licence is this very edge — delete it and every owner→member crossing becomes a breach. An
+    ;; `:interior` member seals too, but licenses its owner's subtree by being an interior, so
+    ;; there the edge really is saying nothing twice over. `licensed-anyway` is that distinction
+    ;; and nothing more: the two licences `seal-licensed` grants without an edge.
+    {:offenders [?r ?t]
+     :rules [[(licensed-anyway ?r ?s) (interior ?owner ?s) (reg-within ?r ?owner)]
+             [(licensed-anyway ?r ?s) (reg-within ?r ?s)]
+             ;; containment rides INSIDE the rule: `?r` reaches this body only through the
+             ;; negation otherwise, and a symbol occurring solely in a negated position is not
+             ;; range-restricted — Cozo rejects the rule head.
+             [(licences-a-seal ?r ?t)
+              (region-contains+ ?r ?t) (sealed-region ?s) (reg-within ?t ?s)
+              (not (licensed-anyway ?r ?s))]]
+     :where [(may-depend ?r ?t) (region-contains+ ?r ?t)
+             (not (licences-a-seal ?r ?t))]})
 
   (law "nothing crosses into a sealed region without a licence"
     ;; The teeth `:may-depend` alone cannot give. Conformance asks whether an edge between two
