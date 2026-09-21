@@ -30,10 +30,10 @@
     {:signature [:=> [:catn [:where :any] [:rules :any] [:index :any] [:outer-vars :any]] :any]
      :performs  [:throws]
      :delegates [kstructure/pin-clause kstructure/rule-name]})
-  (Operation buckets-of "The db's attr→bucket index (which typed relation holds each attribute), memoized on the db handle — what lets a clause compile to ONE stored relation instead of a view."
+  (Operation buckets-of "The db's attr→bucket index (which typed relation holds each attribute), memoized on the db handle and its write generation — what lets a clause compile to ONE stored relation instead of a view."
     {:signature [:=> [:catn [:cdb db/CozoDb]] :any]
      :performs  [:state]
-     :delegates [db/q]})
+     :delegates [db/q db/write-generation]})
   (Operation q "Run a datalog query over a Cozo db like d/q — relation/collection finds, an :in of $ + optional % (rules) + scalar params. Eids come back as native handles."
     {:signature [:=> [:catn [:query :any] [:db db/CozoDb] [:inputs [:* :any]]] :any]
      :performs  [:throws :state]

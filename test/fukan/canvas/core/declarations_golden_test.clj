@@ -460,15 +460,43 @@
 ;; `:may-depend` conformance, which is the point of declaring one. Terms 146 (+2), one rule each.
 ;; Laws hold at 79 — a defrelation declares no denial, and the architecture laws read the relation
 ;; by name, so they widen without moving.
+;; 2026-09-15: `Region` (fukan.common.vocab.code.region) — namespaces claimed by prefix, membership
+;; resolved to a PARTITION (a `.` boundary, the longest prefix wins), superseding Band, which stays
+;; unchanged while canvases still author it. `NsPrefix` moves into it and Band adopts it, so its kind
+;; rule, its value reflexivity and both of its value laws change TAG, not count.
+;;
+;; 2026-09-17: Region gains NESTING, folding in the containment/interiority design that had been
+;; developed separately against brian. `:child` nests a region visibly, `:interior` nests one that
+;; nothing outside the owner's subtree may reach; `region-contains` unions the two and `reg-within`
+;; is its reflexive closure, both joined only over regions. `:child` dedups against the `child` rule
+;; Module and Subsystem already emit; `interior`, `region-contains` and `reg-within` are new, each
+;; with the closure pair the compiler mints for a relation a body references. Terms 154→165 (+11).
+;;
+;; Laws 86→89 (+3), and the three reconcile exactly: +2 GENERATED target-type laws for the two new
+;; slots, +2 AUTHORED (`nothing outside an interior region's owner depends on it`, and `every region
+;; with a prefix claims at least one namespace`), −1 because `:prefix` relaxes from `[:+]` to `[:*]`
+;; — a BOX region claims no namespaces of its own — which drops its generated at-least-one law.
+;;
+;; 2026-09-17 (later): SEALING generalises interiority. `:sealed` says of a region that it admits an
+;; inbound crossing only from a licensed caller; a region held as another's `:interior` is sealed too
+;; and additionally licenses its owner's subtree, so the two are one property and `nothing outside an
+;; interior region's owner depends on it` is REPLACED by `nothing crosses into a sealed region
+;; without a licence` — authored laws net zero. Terms 165→172 (+7): `sealed-region` and
+;; `seal-licensed`, each with the closure pair the compiler mints, plus the `:val/sealed` leaf.
+;; Laws 89→90 (+1): the generated value-type check for the new scalar slot; an OPTIONAL scalar emits
+;; no at-least-one law. `breach` is law-local and is not a term.
 ;; 2026-09-18: `Stratum` ships (fukan.common.vocab.code.stratum) — a LEVEL of the code in the sense
 ;; of stratified design: authored Modules that provide a vocabulary, and the strata it is written in.
-;; Terms 146→153 (+7): the Stratum kind rule, and the `provided-by` and `rests-on` slot rules, each
-;; with its compiler-minted closure pair. Laws 79→85 (+6): three GENERATED (provided-by target-type
-;; + at-least-one, rests-on target-type) and three AUTHORED (conformance of cross-stratum
-;; dependencies to a DIRECT :rests-on edge, one stratum per module, acyclicity). No coverage law, so
-;; nothing here fires for a project that declares no stratum.
-(def ^:private golden-terms {:count 153 :hash -1886749655})
-(def ^:private golden-laws  {:count 85 :hash 2080344892})
+;; Terms +7: the Stratum kind rule, and the `provided-by` and `rests-on` slot rules, each with its
+;; compiler-minted closure pair. Laws +6: three GENERATED (provided-by target-type + at-least-one,
+;; rests-on target-type) and three AUTHORED (conformance of cross-stratum dependencies to a DIRECT
+;; :rests-on edge, one stratum per module, acyclicity). No coverage law, so nothing here fires for a
+;; project that declares no stratum.;;
+;; 2026-09-21: Region and Stratum meet. They were developed on separate branches over the same base
+;; and touch no common term, so the counts add: Region's 172/90 plus Stratum's +7/+6. The hashes are
+;; recomputed, not derived — they are order-sensitive over the whole term set.
+(def ^:private golden-terms {:count 179 :hash 1174249065})
+(def ^:private golden-laws  {:count 96 :hash -1038484490})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

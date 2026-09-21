@@ -168,3 +168,68 @@
       (is rule "precondition: the union is emitted as a rule")
       (is (< (.indexOf ^String rule "entity/name") (.indexOf ^String rule "a != b"))
           (str "the predicate must follow the clauses binding it; got: " rule)))))
+
+(deftest a-bound-var-outranks-an-assumed-one-so-a-chain-is-not-ordered-into-a-product
+  (testing "head vars are ORDERED against, not bound — a bet on the call site. When a clause joined
+            to what this body HAS bound ties with one joined only to a head var, the bound one must
+            win: a rule read under a `not` is evaluated whole, the bet pays nothing, and the losing
+            order is a cross product. Measured on brian: Region's `declared-dep`, authored
+            `within(fr,fa) within(tr,ta) may-depend(fa,ta)`, crossed an 11,044-row relation with
+            itself and did not finish in ten minutes; chained through the hop it took 773ms.
+
+            Asserts the LOWERING — the answer is the same either way, which is the problem."
+    (let [d     (db)
+          lines (first (binding [cq/*attr-buckets* (cq/buckets-of d)]
+                         (cq/compile-body '[(dd ?fr ?tr)]
+                                          '[[(within ?r ?anc) [?r :val/up ?anc]]
+                                            [(within ?r ?anc) [?r :val/self ?anc]]
+                                            [(dd ?fr ?tr)
+                                             (within ?fr ?fa) (within ?tr ?ta)
+                                             [?e :rel/from ?fa] [?e :rel/to ?ta] [?e :rel/kind :may-depend]]]
+                                          (cq/vocab-index) '[?fr ?tr])))
+          ^String rule (first (filter #(re-find #"^r_dd\[" %) lines))]
+      (is rule "precondition: `dd` is emitted as a rule")
+      (is (< (.indexOf rule "r_within[fr, fa]") (.indexOf rule "'rel/from', fa]") (.indexOf rule "r_within[tr, ta]"))
+          (str "the hop joining the two ends must run BETWEEN them; got: " rule)))))
+
+(deftest an-unanchored-expansion-opens-on-its-literal
+  (testing "an expansion sharing no var with what precedes it scores zero everywhere, and written
+            order used to decide — `[?r :rel/from ?a]` first, a scan of every relation in the model,
+            where `[?r :rel/kind :k]` is one seek on the `(a, v)` index. Measured on brian: Region's
+            interior law, 52.9s → 1.9s. A literal only breaks TIES: a clause that joins something
+            already bound still goes first."
+    (let [d     (db)
+          rules '[[(inl-holds ?a ?b) [?r :rel/from ?a] [?r :rel/to ?b] [?r :rel/kind :inl-holds]]]
+          body  (fn [where] (second (binding [cq/*attr-buckets* (cq/buckets-of d)]
+                                      (cq/compile-body where rules (cq/vocab-index) '[?n]))))
+          ^String free  (body '[[?e :entity/name ?n] (inl-holds ?x ?y)])
+          ^String bound (body '[[?e :entity/name ?n] (inl-holds ?e ?y)])]
+      (is (< (.indexOf free "'rel/kind', 'inl-holds'") (.indexOf free "'rel/from'"))
+          (str "nothing bound: the literal must lead; got: " free))
+      (is (< (.indexOf bound "'rel/from', e]") (.indexOf bound "'rel/kind', 'inl-holds'"))
+          (str "?e bound: the clause joining it must still lead; got: " bound)))))
+
+(deftest a-negation-binds-nothing-for-the-clauses-ordered-after-it
+  (testing "the orderer is positional — a clause taken is a clause whose vars count as bound — and a
+            negation binds nothing. Taken early it seeded `bound` with vars nobody had produced, so
+            `[?r :rel/to ?t]` was chosen as a probe on a ?t still free: the scan ordering exists to
+            avoid. It is held back like a predicate, and a `not-join` is judged on its JOIN vars
+            alone. Measured on fukan's own model: the signature-agreement law, 744ms → 149ms
+            (and 258ms before the tie-breaks that exposed it — so the fix beat the original too).
+
+            Asserts the LOWERING; `a-negation-inside-an-expansion-still-filters` holds the answer."
+    (let [d     (db)
+          lines (first (binding [cq/*attr-buckets* (cq/buckets-of d)]
+                         (cq/compile-body '[(differs ?a ?b)]
+                                          '[[(differs ?a ?b)
+                                             [?a :val/kind "f"] [?b :val/kind "f"]
+                                             [?r :rel/from ?b] [?r :rel/kind :of] [?r :rel/to ?t]
+                                             (not-join [?a ?t] [?s :rel/from ?a] [?s :rel/to ?t])]
+                                            [(differs ?a ?b) [?a :val/other ?b]]]
+                                          (cq/vocab-index) '[?a ?b])))
+          ^String rule (first (filter #(re-find #"^r_differs.*'of'" %) lines))]
+      (is rule "precondition: the union is emitted as a rule")
+      (is (< (.indexOf rule "'rel/to', t]") (.indexOf rule "not nj_"))
+          (str "the negation must follow what binds ?t; got: " rule))
+      (is (< (.indexOf rule "'rel/from', b]") (.indexOf rule "'rel/to', t]"))
+          (str "…and ?t must be reached from the bound end of the hop, not scanned; got: " rule)))))

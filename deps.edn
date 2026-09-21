@@ -49,6 +49,23 @@
   ;; `-M` (base :paths only) would miss it and flag false positives on defstructure bodies.
   :lint {:extra-paths ["."]
          :main-opts ["-m" "clj-kondo.main"]}
+  ;; Run a CONSUMING PROJECT's own code against fukan — its region declaration, and whatever
+  ;; reports it writes over the laws. It names nothing project-specific on purpose: the consumer
+  ;; supplies its directory and its main namespace. A consumer keeps both in its own `.fukan/`,
+  ;; with a `deps.edn` there so the directory joins this classpath as a :local/root, and invokes:
+  ;;
+  ;;   clojure -Sdeps '{:deps {<proj>/fukan-model {:local/root "<proj>/.fukan"}}}' \
+  ;;           -M:consumer -m <its-report-ns> --src <proj>/src/main
+  ;;
+  ;; `.` carries the canvas root. `clj-reload` comes from `:deps` — this alias must NOT pin its own
+  ;; version: 0.7.1 runs `(init {:dirs (classpath-dirs)})` at ns-load, and `.` is on the classpath,
+  ;; so it would walk the consuming project's ENTIRE tree before any fukan code runs. On a
+  ;; real-sized repo that is an OOM, not a slowdown — and a consumer is by definition the case where
+  ;; the tree is real. `-Dclj-reload.auto-init=false` is the other half of the same fix and is
+  ;; required, not tuning; `:dev`, `:test` and `:nrepl` set it for the same reason.
+  :consumer {:extra-paths ["."]
+             :jvm-opts    ["-Dclj-reload.auto-init=false"]}
+
   :nrepl {:extra-paths ["." "dev"]
           :jvm-opts ["-Dclj-reload.auto-init=false"]
           :extra-deps {nrepl/nrepl       {:mvn/version "1.3.0"}

@@ -42,3 +42,23 @@
         (is (= #{1 2} (set (cq/q '[:find [?e ...] :where [?e :structure/of :probe/Thing]] cdb)))
             "the probe reads the loaded row and the inserted one alike")
         (finally (db/close cdb))))))
+
+(deftest a-write-after-the-first-query-is-visible-to-the-next
+  (testing "`query/buckets-of` memoizes attr→bucket per db handle, and a clause compiles to the ONE
+            bucket that index names. The handle does not change when `insert-datoms` writes, so a
+            memo keyed on the handle alone goes stale — and stale is not merely slow. An attribute
+            the index already files under one bucket, then written at another type, compiles to a
+            read of the old bucket only: the new datom is silently absent from every answer.
+            (An attribute the index has never seen falls back to the three-way union — correct,
+            but a rule rather than a keyed read; that half cost Region's grounded membership its
+            key on brian.)"
+    (let [cdb (mirror/load-datoms [[1 :val/x 5]])]
+      (try
+        (is (= #{[1 5]} (cq/q '[:find ?e ?v :where [?e :val/x ?v]] cdb))
+            "precondition: the first query files :val/x under t_int")
+        (mirror/insert-datoms cdb [[2 :val/x "five"] [3 :val/y true]])
+        (is (= #{[1 5] [2 "five"]} (cq/q '[:find ?e ?v :where [?e :val/x ?v]] cdb))
+            "the same attribute at a second type is read from both buckets")
+        (is (= #{"t_bool"} (get (cq/buckets-of cdb) "val/y"))
+            "and an attribute first seen after the memo is indexed, not left to the union fallback")
+        (finally (db/close cdb))))))

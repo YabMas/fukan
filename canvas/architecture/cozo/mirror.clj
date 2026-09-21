@@ -16,4 +16,5 @@
   (Operation insert-datoms
     "INSERT [e a v] triples into an already-open Cozo db (:put, not :create) — the additive analog of load-datoms, for grounding extra datoms (the native grammar reflection) onto an existing substrate."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:triples :any]] db/CozoDb]
-     :delegates [db/q]}))
+     :performs  [:state]                     ; announces the write (db/wrote!) to handle-keyed memos
+     :delegates [db/q db/wrote!]}))

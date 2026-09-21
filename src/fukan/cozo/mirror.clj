@@ -88,5 +88,7 @@
   (let [buckets (datoms->buckets triples)]
     (doseq [[bucket {:keys [name]}] relations]
       (when-let [rows (seq (get buckets bucket))]
-        (db/q cdb (str "?[e, a, v] <- $rows :put " name " {e, a, v}") {:rows (vec rows)}))))
+        (db/q cdb (str "?[e, a, v] <- $rows :put " name " {e, a, v}") {:rows (vec rows)})))
+    ;; the handle is the same handle, so whatever is memoized over its contents must be told
+    (db/wrote!))
   cdb)
