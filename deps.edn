@@ -57,9 +57,14 @@
   ;;   clojure -Sdeps '{:deps {<proj>/fukan-model {:local/root "<proj>/.fukan"}}}' \
   ;;           -M:consumer -m <its-report-ns> --src <proj>/src/main
   ;;
-  ;; `clj-reload` is here because `fukan.repl/go` initialises it; `.` carries the canvas root.
+  ;; `.` carries the canvas root. `clj-reload` comes from `:deps` — this alias must NOT pin its own
+  ;; version: 0.7.1 runs `(init {:dirs (classpath-dirs)})` at ns-load, and `.` is on the classpath,
+  ;; so it would walk the consuming project's ENTIRE tree before any fukan code runs. On a
+  ;; real-sized repo that is an OOM, not a slowdown — and a consumer is by definition the case where
+  ;; the tree is real. `-Dclj-reload.auto-init=false` is the other half of the same fix and is
+  ;; required, not tuning; `:dev`, `:test` and `:nrepl` set it for the same reason.
   :consumer {:extra-paths ["."]
-             :extra-deps {io.github.tonsky/clj-reload {:mvn/version "0.7.1"}}}
+             :jvm-opts    ["-Dclj-reload.auto-init=false"]}
 
   :nrepl {:extra-paths ["." "dev"]
           :jvm-opts ["-Dclj-reload.auto-init=false"]
