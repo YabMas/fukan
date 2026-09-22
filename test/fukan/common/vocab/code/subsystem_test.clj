@@ -1,11 +1,8 @@
 (ns fukan.common.vocab.code.subsystem-test
   "The opt-in clean-architecture quality layer: the module-dependency graph is acyclic."
-  (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
-            [fukan.cozo.query :as cq]
             [fukan.cozo.law :as law]
-            [fukan.canvas.core.structure :as s]
             ;; the composition root — registers fukan's Clojure FACT extractor (so `build-model "src"`
             ;; merges extracted code onto the design graph) AND loads the Cozo check engine for s/check
             [fukan.infra.model]
@@ -14,17 +11,13 @@
             [fukan.common.vocab.code.module :as module]
             [fukan.common.vocab.code.subsystem :as subsystem]))
 
-(defn- law-desc
-  "The matching law desc — every module/subsystem law now rides `Subsystem`: its own :may-depend
-   slot-semantics laws plus the rehomed module-graph acyclicity + membership-totality demands."
-  [substr]
-  (->> (:laws (s/structure-by-tag :fukan.common.vocab.code.subsystem/Subsystem))
-       (map :desc) (filter #(str/includes? % substr)) first))
-
-(defn- offenders [db substr]
-  (let [desc (law-desc substr)]
-    (->> (law/check db) (filter #(= desc (:law %)))
-         (mapcat :offenders) (map first) (map #(:entity/name (cq/entity db %))) set)))
+(defn- offenders
+  "The NAMES offending the law keyed `k` — every law here binds one node, so a name is the whole
+   finding. Addressed by KEY, not by a substring of the description: an unknown key throws, where
+   a description reworded upstream silently matches nothing — and a test asserting `empty?` would
+   then pass for the wrong reason, which is the failure this surface exists to prevent."
+  [db k]
+  (law/violation-names db k))
 
 ;; a synthetic mutual pair: A's op delegates to B's op and B's op delegates to A's op
 (declare t-mb-op)
@@ -36,7 +29,7 @@
 (deftest module-acyclicity-fires-on-a-mutual-pair
   (testing "two modules whose ops mutually delegate (a 2-cycle) violate the acyclicity law"
     (let [db (build/vars->cozo [#'t-ma-op #'t-mb-op #'t-mod-ma #'t-mod-mb])]
-      (is (= #{"MA" "MB"} (offenders db "module transitively"))))))
+      (is (= #{"MA" "MB"} (offenders db :subsystem/module-graph-cyclic))))))
 
 ;; a synthetic 3-cycle A→B→C→A (each op delegates to the next module's op): NO direct mutual pair,
 ;; so the old 2-cycle check saw nothing — the transitive SCC law catches all three.
@@ -52,11 +45,11 @@
   (testing "a 3-module cycle T3A→T3B→T3C→T3A — no direct mutual pair, so the OLD 2-cycle check
             missed it; the SCC law flags all three (each transitively depends on itself)"
     (let [db (build/vars->cozo [#'t3-a-op #'t3-b-op #'t3-c-op #'t3-mod-a #'t3-mod-b #'t3-mod-c])]
-      (is (= #{"T3A" "T3B" "T3C"} (offenders db "module transitively"))))))
+      (is (= #{"T3A" "T3B" "T3C"} (offenders db :subsystem/module-graph-cyclic))))))
 
 (deftest fukan-module-graph-is-acyclic
   (testing "fukan's own module graph is acyclic — no transitive cycle, the quality law is a green opt-in"
-    (is (empty? (offenders (pipeline/build-model nil) "module transitively")))))
+    (is (empty? (offenders (pipeline/build-model nil) :subsystem/module-graph-cyclic)))))
 
 ;; ── conformance fixtures: S's op delegates to T's op (cross-subsystem) ──
 (operation/Operation ^{:name "op-t"} t-op-t "callee in T")
@@ -71,12 +64,12 @@
 (deftest conformance-green-when-cross-dep-is-declared
   (testing "M-S → M-T conforms because subsystem S-ok declares :may-depend T"
     (let [db (build/vars->cozo [#'t-op-t #'t-op-s #'t-cm-s #'t-cm-t #'t-sub-S-ok #'t-sub-T])]
-      (is (empty? (offenders db "cross-subsystem"))))))
+      (is (empty? (offenders db :subsystem/undeclared-dependency))))))
 
 (deftest conformance-fires-on-undeclared-cross-dep
   (testing "M-S → M-T violates because S-bad does NOT declare :may-depend T"
     (let [db (build/vars->cozo [#'t-op-t #'t-op-s #'t-cm-s #'t-cm-t #'t-sub-S-bad #'t-sub-T])]
-      (is (= #{"M-S"} (offenders db "cross-subsystem"))))))
+      (is (= #{"M-S"} (offenders db :subsystem/undeclared-dependency))))))
 
 ;; ── over-declaration fixtures: V declares :may-depend T but M-V realizes no dependency on M-T ──
 (operation/Operation ^{:name "op-v"} t-op-v "a V op that depends on nothing cross-subsystem")
@@ -105,11 +98,11 @@
 (deftest may-depend-acyclicity-fires-on-a-cycle
   (testing "a :may-depend cycle CY-A ⇄ CY-B violates the acyclicity law"
     (let [db (build/vars->cozo [#'t-sub-cy-a #'t-sub-cy-b])]
-      (is (= #{"CY-A" "CY-B"} (offenders db "subsystem transitively"))))))
+      (is (= #{"CY-A" "CY-B"} (offenders db :subsystem/may-depend-cyclic))))))
 
 (deftest fukan-may-depend-graph-is-acyclic
   (testing "fukan's declared :may-depend DAG is acyclic"
-    (is (empty? (offenders (pipeline/build-model nil) "subsystem transitively")))))
+    (is (empty? (offenders (pipeline/build-model nil) :subsystem/may-depend-cyclic)))))
 
 ;; ── membership fixtures: a module in no subsystem (with a subsystem present) ──
 (module/Module ^{:name "orphan"} t-orphan "a module in no subsystem")
@@ -122,22 +115,22 @@
     ;; t-ext-orphan is stamped fact-stratum at BUILD time (fact-vars->cozo) — provenance is the
     ;; pipeline's, not an authoring slot
     (let [db (build/fact-vars->cozo [#'t-homed #'t-sub-home] [#'t-ext-orphan])]
-      (is (empty? (offenders db "belongs to a Subsystem"))
+      (is (empty? (offenders db :subsystem/module-unclustered))
           "design-membership is for authored modules; extracted modules are out of scope"))))
 
 (deftest membership-fires-on-unclustered-module
   (testing "with a Subsystem present, a Module in none is an offender"
     (let [db (build/vars->cozo [#'t-orphan #'t-homed #'t-sub-home])]
-      (is (= #{"orphan"} (offenders db "belongs to a Subsystem"))))))
+      (is (= #{"orphan"} (offenders db :subsystem/module-unclustered))))))
 
 (deftest membership-vacuous-without-subsystems
   (testing "no Subsystem modelled → the membership law is vacuous (guard)"
     (let [db (build/vars->cozo [#'t-orphan])]
-      (is (empty? (offenders db "belongs to a Subsystem"))))))
+      (is (empty? (offenders db :subsystem/module-unclustered))))))
 
 (deftest fukan-every-module-is-clustered
   (testing "every fukan Module belongs to a subsystem"
-    (is (empty? (offenders (pipeline/build-model nil) "belongs to a Subsystem")))))
+    (is (empty? (offenders (pipeline/build-model nil) :subsystem/module-unclustered)))))
 
 ;; (The latent-boundaries interface-segregation discovery reading was retired with the
 ;; canvas/principles/ layer; only its two module-graph enforcement laws were rehomed onto Subsystem.)

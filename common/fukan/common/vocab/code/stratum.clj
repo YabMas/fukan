@@ -50,6 +50,7 @@
     ;; edges count: resting on a stratum that rests on a third does not license a call into the
     ;; third — that is the reach past a level this law exists to surface.
     {:scope :global
+     :key :stratum/undeclared-dependency
      :offenders [?from ?to ?from-stratum ?to-stratum]
      :rules [[(rests ?s ?t) (is ?s ::Stratum) (rests-on ?s ?t)]]
      :where [(ns-depends ?from ?to)
@@ -60,11 +61,13 @@
 
   (law "a Module provides at most one Stratum"
     {:scope :global
+     :key :stratum/module-in-two-strata
      :offenders [?module]
      :where [(provided-by ?s ?module) (provided-by ?t ?module) [(not= ?s ?t)]]})
 
   (law "the :rests-on graph is acyclic — no stratum is written in itself"
-    {:offenders [?stratum]
+    {:key :stratum/rests-on-cyclic
+     :offenders [?stratum]
      :rules [[(stratum-reaches ?s ?t) (rests-on ?s ?t)]
              [(stratum-reaches ?s ?t) (rests-on ?s ?mid) (stratum-reaches ?mid ?t)]]
      :where [(stratum-reaches ?stratum ?stratum)]}))

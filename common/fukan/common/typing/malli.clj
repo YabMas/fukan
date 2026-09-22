@@ -229,7 +229,8 @@
   ;; which one. The name is the only part anybody can act on, and it is what they will grep for;
   ;; a ref that carries no name has none to give, and there the node is all there is.
   (law "a type-reference names a target"
-    {:offenders [?sch]
+    {:key :typing/reference-unnamed
+     :offenders [?sch]
      :where [[?sch :val/kind "ref"]
              (not-join [?sch] [?sch :val/ref ?_n])]})
   ;; Reporting the NAME also collapses correctly: two signatures referencing the same missing
@@ -241,6 +242,7 @@
   ;; belongs. Changing which var an offender list leads with can silently switch a law off.
   (law "every type-reference resolves to a modelled Kind"
     {:scope :global
+     :key :typing/reference-unresolved
      :offenders [?nm]
      :where [(is ?sch ::Schema) [?sch :val/kind "ref"] [?sch :val/ref ?nm]
              (not-join [?nm] [?k :entity/name ?nm] (Kind ?k))]}))

@@ -80,6 +80,7 @@
    :may-depend [:* Subsystem]}  ; the subsystems it is allowed to depend on (declared intent)
   (law "every cross-subsystem module dependency follows a declared :may-depend edge"
     {:scope :global
+     :key :subsystem/undeclared-dependency
      :offenders [?m]
      :rules [[(declared-dep ?s ?t) (is ?s Subsystem) (may-depend ?s ?t)]]
      :where [(module-depends ?m ?n)
@@ -89,7 +90,8 @@
   ;; is injected — no :scope :global, no explicit tag clause. sub-reaches follows :may-depend
   ;; edges directly and is PURELY self-recursive.
   (law "the :may-depend graph is acyclic — no subsystem transitively depends on itself"
-    {:offenders [?s]
+    {:key :subsystem/may-depend-cyclic
+     :offenders [?s]
      :rules [[(sub-reaches ?s ?t) (may-depend ?s ?t)]
              [(sub-reaches ?s ?t) (may-depend ?s ?mid) (sub-reaches ?mid ?t)]]
      :where [(sub-reaches ?s ?s)]})
@@ -101,6 +103,7 @@
   ;; vacuous when no Modules are modelled.
   (law "the module-dependency graph is acyclic — no module transitively depends on itself"
     {:scope :global
+     :key :subsystem/module-graph-cyclic
      :offenders [?m]
      :rules [[(module-reaches ?m ?n) (module-depends ?m ?n)]
              [(module-reaches ?m ?n) (module-depends ?m ?mid) (module-reaches ?mid ?n)]]
@@ -110,6 +113,7 @@
   ;; through the injected `in-subsystem` defrelation. Extracted code-fact modules are out of scope.
   (law "every Module belongs to a Subsystem"
     {:scope :global
+     :key :subsystem/module-unclustered
      :offenders [?mod]
      :where [(is ?_s Subsystem) (is ?mod Module)
              (not (fact ?mod))

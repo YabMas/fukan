@@ -3,8 +3,7 @@
    extracted call graph. What has to hold: every namespace sits in exactly one region even where
    prefixes overlap, so an undeclared dependency is one finding; and every law is silent in a
    project that declares no region."
-  (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.structure :as s]
             [fukan.cozo.build :as build]
             [fukan.cozo.law :as law]
@@ -16,16 +15,13 @@
             [fukan.common.extraction.clojure.module :as clj-module]
             [fukan.common.extraction.clojure.operation :as clj-op]))
 
-(defn- law-desc [substr]
-  (->> (:laws (s/structure-by-tag ::region/Region))
-       (map :desc) (filter #(str/includes? % substr)) first))
-
-(defn- offenders [db substr]
-  (let [desc (law-desc substr)]
-    (->> (law/check db) (filter #(= desc (:law %)))
-         (mapcat :offenders)
-         (map (fn [row] (mapv #(law/offender-label db %) row)))
-         set)))
+(defn- offenders
+  "Offender rows of the law keyed `k`, each cell resolved to its name. Addressed by KEY, not by a
+   substring of the description: an unknown key throws, where a description that has been reworded
+   upstream silently matches nothing — and a test asserting `empty?` would then pass for the wrong
+   reason, which is the failure this whole surface exists to prevent."
+  [db k]
+  (law/violation-rows db k))
 
 (defn- membership [db]
   (set (cq/q '[:find ?nsn ?rn :in $ %
@@ -82,8 +78,8 @@
                ["app.db.execute.run"        "TestExecute"]}
              (membership db))))
     (testing "and so every namespace is covered and no prefix is doubly claimed"
-      (is (empty? (offenders db "belongs to a region")))
-      (is (empty? (offenders db "at most one region"))))))
+      (is (empty? (offenders db :region/namespace-unclaimed)))
+      (is (empty? (offenders db :region/prefix-ambiguous))))))
 
 (deftest an-undeclared-dependency-is-one-finding
   (testing "Live reaching Boot and Execute reaching Persistence are undeclared, and each is ONE row.
@@ -92,7 +88,7 @@
     (let [db (build/vars->cozo (into fact-vars region-vars))]
       (is (= #{["app.server-components.sse" "app.server"  "TestLive"    "TestBoot"]
                ["app.db.execute.run"        "app.db.core" "TestExecute" "TestPersistence"]}
-             (offenders db "cross-region"))))))
+             (offenders db :region/undeclared-dependency))))))
 
 ;; the namespace a dot-terminated prefix must NOT claim: `app.web.` claims below `app.web` only
 (clj-module/Ns ^{:name "app.web"} r-ns-web-root)
@@ -129,16 +125,16 @@
 
 (deftest an-unclaimed-namespace-is-an-offender-once-a-region-exists
   (let [db (build/vars->cozo (into fact-vars (concat region-vars [#'r-orphan-fn #'r-ns-orphan])))]
-    (is (= #{["elsewhere.orphan"]} (offenders db "belongs to a region")))))
+    (is (= #{["elsewhere.orphan"]} (offenders db :region/namespace-unclaimed)))))
 
 (deftest a-project-that-declares-no-region-asserts-nothing
   (testing "every law is vacuous without a Region, or merely loading `fukan.common` would turn every
             consumer's check red"
     (let [db (build/vars->cozo (into fact-vars [#'r-orphan-fn #'r-ns-orphan]))]
-      (is (empty? (offenders db "belongs to a region")))
-      (is (empty? (offenders db "cross-region")))
-      (is (empty? (offenders db "at most one region")))
-      (is (empty? (offenders db "acyclic"))))))
+      (is (empty? (offenders db :region/namespace-unclaimed)))
+      (is (empty? (offenders db :region/undeclared-dependency)))
+      (is (empty? (offenders db :region/prefix-ambiguous)))
+      (is (empty? (offenders db :region/may-depend-cyclic))))))
 
 ;; ── the tie longest-wins cannot break ────────────────────────────────────────
 
@@ -147,7 +143,7 @@
 
 (deftest one-prefix-claimed-by-two-regions-is-one-finding
   (let [db (build/vars->cozo [#'r-dup-a #'r-dup-b])]
-    (is (= #{["TestDupA" "TestDupB" "dup.x"]} (offenders db "at most one region")))))
+    (is (= #{["TestDupA" "TestDupB" "dup.x"]} (offenders db :region/prefix-ambiguous)))))
 
 ;; ── reach ────────────────────────────────────────────────────────────────────
 
@@ -157,13 +153,13 @@
 
 (deftest a-region-that-reaches-itself-is-incoherent-intent
   (let [db (build/vars->cozo [#'r-cyc-x #'r-cyc-y])]
-    (is (= #{["TestCycX"] ["TestCycY"]} (offenders db "acyclic")))))
+    (is (= #{["TestCycX"] ["TestCycY"]} (offenders db :region/may-depend-cyclic)))))
 
 (deftest regions-neither-of-which-reaches-the-other-are-not-ordered
   (testing "Live and Web reach neither each other nor anything in common, and nothing asks them to:
             reach is a partial order, not a ranking"
     (let [db (build/vars->cozo (into fact-vars region-vars))]
-      (is (empty? (offenders db "acyclic"))))))
+      (is (empty? (offenders db :region/may-depend-cyclic))))))
 
 ;; ── sealing: the rule a drawing states by dashing a node ─────────────────────
 ;; `:may-depend` can say who may depend on a region; it cannot say that a region admits nothing
@@ -217,7 +213,7 @@
       (is (= #{["app.dom.core" "app.db.execute.run" "SExecute"]
                ["app.other.x" "app.db.execute.run" "SExecute"]
                ["app.other.y" "app.db.core"        "SPersistence"]}
-             (offenders db "sealed region"))))))
+             (offenders db :region/seal-breached))))))
 
 (deftest a-crossing-is-reported-against-the-tightest-seal-it-breaches
   ;; `app.other.x` → the interior breaches BOTH seals: it is licensed onto neither. It is reported
@@ -225,7 +221,7 @@
   ;; licensed onto the outer — so suppression has to read an actual breach and not mere nesting,
   ;; or that row would vanish with it.
   (let [db   (build/vars->cozo seal-vars)
-        rows (offenders db "sealed region")
+        rows (offenders db :region/seal-breached)
         into-interior (filter #(= "app.db.execute.run" (second %)) rows)]
     (is (= 2 (count into-interior)))
     (is (= #{"SExecute"} (set (map #(nth % 2) into-interior))))
@@ -235,7 +231,7 @@
   ;; `:sealed` absent is not `:sealed false`: a region that says nothing admits everything, and the
   ;; law is vacuous over a model where no region seals and none is anybody's interior.
   (let [db (build/vars->cozo (into fact-vars region-vars))]
-    (is (empty? (offenders db "sealed region")))))
+    (is (empty? (offenders db :region/seal-breached)))))
 
 ;; ── containment implies reach, downward and only downward ────────────────────
 ;; A whole that may not touch its own parts describes nothing anybody builds, so a region reaches
@@ -261,7 +257,7 @@
     (let [db (build/vars->cozo [#'c-inner-fn #'c-outer-fn #'c-ns-outer #'c-ns-inner
                                 #'c-part #'c-whole])]
       (is (= #{["app.pack.part.impl" "app.pack.core" "CPart" "CWhole"]}
-             (offenders db "cross-region"))))))
+             (offenders db :region/undeclared-dependency))))))
 
 ;; ── the corollary: an edge containment already licenses says nothing ─────────
 ;; Which matters because containment ARRIVED LATE. Every canvas authored while the laws disagreed
@@ -274,7 +270,7 @@
 (deftest an-edge-containment-already-licenses-is-reported
   (testing "one finding naming both ends, whose fix is deleting one line"
     (let [db (build/vars->cozo [#'h-part #'h-whole])]
-      (is (= #{["HWhole" "HPart"]} (offenders db "already contains"))))))
+      (is (= #{["HWhole" "HPart"]} (offenders db :region/redundant-may-depend))))))
 
 ;; the same shape with the member SEALED, where the edge is the opposite of redundant
 (declare hs-core-fn hs-part-fn)
@@ -294,8 +290,8 @@
             demands the owner's reach be stated rather than implied."
     (let [db (build/vars->cozo [#'hs-core-fn #'hs-part-fn #'hs-ns-core #'hs-ns-part
                                 #'h-sealed #'h-owner])]
-      (is (empty? (offenders db "already contains")))
-      (is (empty? (offenders db "sealed region"))
+      (is (empty? (offenders db :region/redundant-may-depend)))
+      (is (empty? (offenders db :region/seal-breached))
           "the owner's crossing into the sealed member is licensed by the edge"))))
 
 ;; ── a member may be a Module ─────────────────────────────────────────────────
@@ -351,9 +347,9 @@
                ["mm.dom.use"          "MDomain"]
                ["mm.dom.deep"         "MDomain"]}
              (membership db)))
-      (is (empty? (offenders db "belongs to a region"))
+      (is (empty? (offenders db :region/namespace-unclaimed))
           "a namespace a placed Module claims is covered — through the Module, not through a prefix")
-      (is (empty? (offenders db "contained by every region"))
+      (is (empty? (offenders db :region/module-uncontained))
           "and nothing is ambiguous: the Module sits inside the region whose prefix reaches it"))))
 
 (deftest a-module-held-as-an-interior-is-sealed
@@ -364,13 +360,13 @@
     (let [db (build/vars->cozo (concat module-facts [#'m-persistence #'m-domain]))]
       (is (= #{["mm.dom.use"  "mm.db.execute"       "execute"]
                ["mm.dom.deep" "mm.db.execute.pools" "execute"]}
-             (offenders db "sealed region"))))))
+             (offenders db :region/seal-breached))))))
 
 (deftest the-owner-reaches-the-module-it-contains
   (testing "containment implies reach for a Module member exactly as for a region one — the owner's
             own call into its interior is neither a breach nor an undeclared dependency"
     (let [db (build/vars->cozo (concat module-facts [#'m-persistence #'m-domain]))
-          rows (offenders db "cross-region")]
+          rows (offenders db :region/undeclared-dependency)]
       (is (empty? (filter #(= "mm.db.core" (first %)) rows))))))
 
 (deftest an-unplaced-module-claims-nothing
@@ -386,9 +382,9 @@
                ["mm.dom.deep"         "UDomain"]}
              (membership db))
           "every namespace stays where the prefixes put it")
-      (is (empty? (offenders db "sealed region")))
-      (is (empty? (offenders db "contained by every region")))
-      (is (empty? (offenders db "belongs to a region"))))))
+      (is (empty? (offenders db :region/seal-breached)))
+      (is (empty? (offenders db :region/module-uncontained)))
+      (is (empty? (offenders db :region/namespace-unclaimed))))))
 
 ;; ── the one case specificity cannot settle ───────────────────────────────────
 
@@ -407,5 +403,5 @@
             already sits, or narrow the prefix that reaches across it."
     (let [db (build/vars->cozo [#'hz-fn #'hz-ns #'hz-ns2 #'hz-module #'hz-domain #'hz-persistence])]
       (is (= #{["hzexec" "HzPersistence"]}
-             (offenders db "contained by every region"))))))
+             (offenders db :region/module-uncontained))))))
 

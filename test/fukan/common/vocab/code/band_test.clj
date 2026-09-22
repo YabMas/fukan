@@ -2,8 +2,7 @@
   "`Band` — the stratum whose membership is DERIVED from the namespace path and whose evidence is
    the extracted call graph. What has to hold: the laws bite when a band is declared, and are
    silent — not merely quiet — in the projects that declare none, which is most of them."
-  (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.structure :as s]
             [fukan.cozo.build :as build]
             [fukan.cozo.law :as law]
@@ -14,16 +13,13 @@
             [fukan.common.extraction.clojure.module :as clj-module]
             [fukan.common.extraction.clojure.operation :as clj-op]))
 
-(defn- law-desc [substr]
-  (->> (:laws (s/structure-by-tag :fukan.common.vocab.code.band/Band))
-       (map :desc) (filter #(str/includes? % substr)) first))
-
-(defn- offenders [db substr]
-  (let [desc (law-desc substr)]
-    (->> (law/check db) (filter #(= desc (:law %)))
-         (mapcat :offenders)
-         (map (fn [row] (mapv #(:entity/name (cq/entity db %)) row)))
-         set)))
+(defn- offenders
+  "Offender rows of the law keyed `k`, each cell resolved to its name. Addressed by KEY, not by a
+   substring of the description: an unknown key throws, where a description that has been reworded
+   upstream silently matches nothing — and a test asserting `empty?` would then pass for the wrong
+   reason, which is the failure this whole surface exists to prevent."
+  [db k]
+  (law/violation-rows db k))
 
 ;; ── a two-namespace fixture: app.ui calls app.core, and app.core calls back ──
 (declare t-core-fn)
@@ -46,9 +42,9 @@
             says a namespace is in the wrong without saying which require is"
     (let [db (build/vars->cozo (into fact-vars [#'t-band-core #'t-band-ui]))]
       (is (= #{["app.core.thing" "app.ui.screen" "TestCore" "TestUi"]}
-             (offenders db "cross-band")))
+             (offenders db :band/undeclared-dependency)))
       (testing "and the declared direction is NOT an offender"
-        (is (not (contains? (offenders db "cross-band")
+        (is (not (contains? (offenders db :band/undeclared-dependency)
                             ["app.ui.screen" "app.core.thing" "TestUi" "TestCore"])))))))
 
 (deftest membership-is-derived-from-the-name-and-never-authored
@@ -70,7 +66,7 @@
             coverage law an unbanded package calls anything, is called by anything, and the model
             stays green."
     (let [db (build/vars->cozo (into fact-vars [#'t-orphan-fn #'t-ns-orphan #'t-band-core #'t-band-ui]))]
-      (is (= #{["elsewhere.orphan"]} (offenders db "belongs to a band"))
+      (is (= #{["elsewhere.orphan"]} (offenders db :band/namespace-unclaimed))
           "the coverage law is what makes the design non-opt-in"))))
 
 (deftest a-project-that-declares-no-band-is-asserting-nothing-about-coverage
@@ -78,9 +74,9 @@
             no bands makes no claim of a partition, and every law here must be vacuous for it —
             otherwise merely loading `fukan.common` would turn every consumer's check red"
     (let [db (build/vars->cozo (conj fact-vars #'t-ns-orphan))]
-      (is (empty? (offenders db "belongs to a band")))
-      (is (empty? (offenders db "cross-band")))
-      (is (empty? (offenders db "acyclic"))))))
+      (is (empty? (offenders db :band/namespace-unclaimed)))
+      (is (empty? (offenders db :band/undeclared-dependency)))
+      (is (empty? (offenders db :band/may-depend-cyclic))))))
 
 ;; ── acyclicity ───────────────────────────────────────────────────────────────
 
@@ -90,4 +86,4 @@
 
 (deftest a-cyclic-declaration-is-incoherent-intent
   (let [db (build/vars->cozo [#'t-band-x #'t-band-y])]
-    (is (= #{["TestX"] ["TestY"]} (offenders db "acyclic")))))
+    (is (= #{["TestX"] ["TestY"]} (offenders db :band/may-depend-cyclic)))))

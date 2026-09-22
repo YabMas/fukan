@@ -511,7 +511,12 @@
 ;; one law. Laws 97→98 (+1, AUTHORED): a placed Module must be contained by every region whose
 ;; prefix claims the namespace it pairs with — the one case specificity cannot settle.
 (def ^:private golden-terms {:count 186 :hash -1229796599})
-(def ^:private golden-laws  {:count 98 :hash 1660852968})
+;; 2026-09-22 (later still): every authored law in the shipped vocabulary carries a stable `:key`
+;; — Region, Band, Subsystem, Stratum, Kind and the malli dialect were reachable only by matching
+;; their DESCRIPTION, which goes silently green when the sentence is reworded and silent altogether
+;; when a law is added. Counts unchanged; the laws hash moves because `:key` is part of the
+;; snapshot's per-law tuple, which is the point — a key is now emission the golden guards.
+(def ^:private golden-laws  {:count 98 :hash 1309066733})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
