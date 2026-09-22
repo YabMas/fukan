@@ -68,6 +68,11 @@
   fukan.common.vocab.code.stratum
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  ;; …and Region since 2026-09-22, for the same reason: a member may be a Module, so `Module` is a
+  ;; slot target and slot targets live in the body the instance hook drops.
+  fukan.common.vocab.code.region
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   ;; the Clojure extraction plugins now declare the Fn/Ns codomain `defstructure`s, whose slot-target
   ;; symbols (Schema/Fn) are used only inside clause bodies the instance hook drops — false positives.
   fukan.common.extraction.clojure.operation

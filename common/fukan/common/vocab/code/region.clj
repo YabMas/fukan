@@ -18,16 +18,37 @@
    MEMBERSHIP IS A PARTITION, derived from the namespace's name and never authored. A prefix claims
    the namespace it names and every namespace below it at a `.` boundary — `app.server` claims
    `app.server.http` and not `app.server-components` — and a prefix already ending in `.` claims only
-   what lies below it. Where two regions' prefixes both claim a namespace, the LONGER prefix wins,
-   which is what lets a region be carved out of another's subtree (`app.db.execute` out of
-   `app.db`). Two claims on one namespace can only tie by being the same string, and a prefix
-   claimed by two regions is a law of its own; with coverage on top, every namespace is in exactly
-   one region, so each undeclared dependency is one finding.
+   what lies below it. Where two claims cover one namespace, THE MORE SPECIFIC WINS — between two
+   prefixes that is the longer, which is what lets a region be carved out of another's subtree
+   (`app.db.execute` out of `app.db`), and between a prefix and a Module's pairing it is the
+   pairing, which names ONE namespace where a prefix names a subtree. Two claims can only tie by
+   being the same kind and the same reach — the same prefix string, or two Modules pairing with one
+   namespace — and each of those is already a law: the prefix-ambiguity law below, and
+   `:correspondence/namespace-ambiguous`. So the order is total because two other laws keep it
+   total, and with coverage on top every namespace is in exactly one grouping, which is what makes
+   each undeclared dependency exactly one finding.
 
-   REGIONS NEST, and nesting has two kinds. `:child` holds a region visible from outside, so a
+   REGIONS NEST, and nesting has two kinds. `:child` holds a member visible from outside, so a
    declaration can name a BOX that is not itself a stratum — a pair of regions at different depths
    that share a name and nothing else — and an outward edge onto the box covers what it holds
    without restating it against each part. `:interior` holds one that is NOT visible.
+
+   A MEMBER MAY BE A MODULE, which is how a boundary gets both of the things a boundary has: a
+   Region claims a POSITION — where code sits and what may reach it — and a Module claims CONTENTS,
+   the operations and their signatures, through its pairing with code. Holding a Module as a member
+   is what lets one boundary say both, and it is the only way a Module is sealed or hidden at all:
+   `:sealed` is a Region slot, so a Module is sealed by being somebody's `:interior`, and the seal
+   then covers its whole containment subtree (a Module holding sub-Modules, each paired 1:1, is how
+   a boundary spanning several namespaces is spelled).
+
+   A MODULE CLAIMS ITS NAMESPACE ONLY ONCE IT IS PLACED — contained, transitively, under some
+   Region. Declaring a Module is therefore inert for membership until somebody contains it, and
+   that is load-bearing twice over. It means an unplaced Module cannot quietly remove a namespace
+   from the region whose prefix claims it (the hole would be punched by a declaration in another
+   file entirely, and coverage would move with nothing to say why), and it means adopting a module
+   and placing it are two changes rather than one: the first provably moves no number, the second
+   moves the boundary. What remains reportable is the genuinely ambiguous case — a Module placed
+   under one region while another region's prefix claims its namespace — and that is a law below.
 
    CONTAINMENT IMPLIES REACH, DOWNWARD AND ONLY DOWNWARD. A region reaches what it contains without
    declaring an edge onto it: a whole that may not touch its own parts describes nothing anybody
@@ -62,10 +83,21 @@
 
    ⚠ THIS TIER REACHES A LANGUAGE HERE (as `Band` does). `Ns` is a Clojure fact sort, named by FULL
    TAG KEYWORD — the documented spelling for a namespace deliberately not required, so the coupling
-   is at the data level and not the compile level. A project with a different extractor mints no
-   `Ns` nodes and gets vacuous laws rather than failing ones. The honest fix is an extractor-neutral
-   code-unit sort, and a second extractor is its trigger."
+   is at the data level and not the compile level.
+
+   WHAT THAT COSTS A PROJECT THAT IS NOT CLOJURE, measured rather than assumed, because this said
+   the wrong thing until 2026-09-22 (it promised vacuous laws): with the Clojure extraction tier
+   LOADED and no code extracted, these laws are vacuous and green — that is the design-only build,
+   and the distinction that makes it work is that the SORT is registered, not that any namespace
+   exists. Without that tier at all, four of them are UNDECIDABLE: `(is ?ns Ns)` cannot compile
+   against a sort nobody registered, which drops `region-claims`, and `ns-depends` is the
+   extractor's rule and is simply absent. That is exit 2, and it is the honest answer rather than a
+   defect — a law about namespaces cannot be decided where namespaces are not a thing, and a green
+   verdict there would be a claim nobody checked. A project with a different extractor should
+   expect this vocabulary to report as unevaluated, not as satisfied. The fix is the
+   extractor-neutral code-unit sort, and a second extractor is its trigger."
   (:require [clojure.string :as str]
+            [fukan.common.vocab.code.module :as module :refer [Module]]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.cozo.query :as cq]))
 
@@ -142,24 +174,48 @@
    `reg-within` 11,044 rows on brian rather than twenty, and `declared-dep` crossing that relation
    with itself is 122M pairs, which is what kept both code-graph laws from finishing. No ANSWER was
    ever wrong — every call site happened to bind a Region — which is exactly how it stayed hidden.
-   `:interior` needs no pin: that kind is Region's own."
+   `:interior` needs no pin: that kind is Region's own.
+
+   ⚠⚠ THE MODULE BODY NEEDS THE PIN ON BOTH ENDS, and the second one has no precedent above. A
+   member may be a Module and a Module holds sub-Modules, so containment has to continue inside a
+   Module's own subtree or a seal stops at the boundary it was drawn around. But
+   `Module {:child [:* Operation Kind Module]}` — an unpinned CHILD position therefore puts every
+   Operation into `region-contains`, hence into `reg-within`, and `declared-dep` crosses
+   `reg-within` with itself. That is the same 122M-pair shape as above, reached from the position
+   the rule above never had to defend, and it would be invisible in the answers for exactly the
+   same reason: every call site binds a grouping, so no row would ever be wrong."
   [?r ?c]
   [(is ?r ::Region) (child ?r ?c)]
-  [(interior ?r ?c)])
+  [(interior ?r ?c)]
+  [(is ?r ::module/Module) (child ?r ?c) (is ?c ::module/Module)])
 
 (s/defrelation :reg-within
-  "Region ?r is ?anc itself, or nested anywhere inside it. Two bodies rather than a recursion:
-   `region-contains+` is the compiler's own closure, minted for the relation and injected where
-   referenced, so both nesting kinds are rolled up without a hand-written transitive rule."
+  "Grouping ?r is ?anc itself, or nested anywhere inside it. The closure body is a rollup rather
+   than a recursion: `region-contains+` is the compiler's own closure, minted for the relation and
+   injected where referenced, so every nesting kind rolls up without a hand-written transitive rule.
+
+   ⚠ REFLEXIVITY IS PER SORT, and the Module body is not decoration. A seal is reported against the
+   TIGHTEST grouping a crossing breaches, which the law asks as `(reg-within ?tr ?s)` with ?tr the
+   target's own grouping — so a sealed grouping that is not within ITSELF can never be the seal a
+   crossing is attributed to, and the crossing is attributed to the next seal outwards instead,
+   where a declared edge onto that outer region quietly licenses it. Measured on the toy model the
+   moment the Module body was missing: a caller licensed onto the owner reached the owner's
+   interior Module with NO finding at all, which is precisely the failure this vocabulary exists to
+   make impossible."
   [?r ?anc]
   [(is ?r ::Region) (is ?anc ::Region) [(= ?r ?anc)]]
+  [(is ?r ::module/Module) (is ?anc ::module/Module) [(= ?r ?anc)]]
   [(region-contains+ ?anc ?r)])
 
 (s/defrelation :sealed-region
-  "Region ?s admits an inbound crossing only from a licensed caller. Two ways to become one, and
+  "Grouping ?s admits an inbound crossing only from a licensed caller. Two ways to become one, and
    they are the same property arrived at differently: a region says `:sealed` of ITSELF, or a
-   region is held as another's `:interior`. An interior is therefore not a second mechanism — it is
-   a seal that additionally licenses its owner's subtree, which is what `seal-licensed` says."
+   member is held as another's `:interior`. An interior is therefore not a second mechanism — it is
+   a seal that additionally licenses its owner's subtree, which is what `seal-licensed` says.
+
+   ⚠ A MODULE IS SEALED ONLY BY THE SECOND ROUTE. `:sealed` is a Region slot and stays one — giving
+   Module a seal of its own would make it a peer of the groupings when it is the element they
+   group — so a Module is sealed by being somebody's `:interior`, and never by saying so itself."
   [?s]
   [(is ?s ::Region) [?s :val/sealed true]]
   [(interior ?_owner ?s)])
@@ -201,10 +257,41 @@
   [(region-claims ?ns ?_r ?p) (region-claims ?ns ?_r2 ?p2)
    [(fukan.common.vocab.code.region/longer? ?p2 ?p)]])
 
+(s/defrelation :module-claims
+  "Namespace ?ns is claimed by Module ?m — the `Module ↦ Ns` pairing, and ONLY for a Module that is
+   PLACED: contained, transitively, under some Region. `reg-within` reaching a Region from a Module
+   is exactly that question, since its reflexive body is Region-to-Region and cannot answer it.
+
+   The gate is the difference between adopting a module and moving a boundary. Without it,
+   declaring a Module anywhere under a declared region's prefix would silently take that namespace
+   out of the region's claim — coverage moves, the seal stops covering what it covered, and the
+   declaration that caused it is in another file entirely. With it, authoring a Module changes no
+   number until somebody contains it, so the adoption and the boundary move are two changes and
+   the first is one anybody can verify by the check being identical."
+  [?ns ?m]
+  [(is ?m ::module/Module) (corresponds ?m ?ns) (reg-within ?m ?anc) (is ?anc ::Region)])
+
+(s/defrelation :module-claimed
+  "Namespace ?ns is claimed by some placed Module — the existential `in-region` needs to prefer an
+   exact claim over a prefix one without binding which Module made it."
+  [?ns]
+  [(module-claims ?ns ?_m)])
+
 (s/defrelation :in-region
-  "Namespace ?ns belongs to Region ?r — the region whose claim on it no longer prefix outranks."
-  [?ns ?r]
-  [(region-claims ?ns ?r ?p) (not (region-claim-outranked ?ns ?p))])
+  "Namespace ?ns belongs to grouping ?g — the claim on it that nothing more specific outranks.
+
+   THE MORE SPECIFIC CLAIM WINS, and there are two kinds of claim rather than one: a Module's
+   pairing names ONE namespace, a region's prefix names a subtree, so a pairing outranks any
+   prefix and prefixes outrank each other by length. Nothing orders the two kinds by a shared
+   scale — containment depth is not a generalisation of prefix length, it ties where length
+   separates — so the order is over SPECIFICITY, which both kinds have.
+
+   ⚠ TWO BODIES, so this is MATERIALIZED where it used to fold into its call sites, and it sits in
+   the hot path of both code-graph laws. Measured on brian (~900 namespaces) the cost did not
+   register; a project where it does should look here first."
+  [?ns ?g]
+  [(module-claims ?ns ?g)]
+  [(region-claims ?ns ?g ?p) (not (region-claim-outranked ?ns ?p)) (not (module-claimed ?ns))])
 
 (defstructure Region
   "A region of the codebase: the namespaces its `:prefix`es claim, the regions nested inside it,
@@ -213,11 +300,11 @@
    in a project that declares no Region.
 
    `:prefix` is zero-or-more so a BOX may claim nothing and exist only to hold what it nests."
-  {:sealed     [:? :boolean] ; admits an inbound crossing only from a licensed caller
-   :prefix     [:* NsPrefix]  ; the namespace prefixes this region claims (a box claims none)
-   :child      [:* Region]    ; nested regions, visible from outside
-   :interior   [:* Region]    ; nested regions, hidden from outside this region's subtree
-   :may-depend [:* Region]}   ; the regions its namespaces may depend on (declared intent)
+  {:sealed     [:? :boolean]        ; admits an inbound crossing only from a licensed caller
+   :prefix     [:* NsPrefix]        ; the namespace prefixes this region claims (a box claims none)
+   :child      [:* Region Module]   ; nested members, visible from outside
+   :interior   [:* Region Module]   ; nested members, hidden from outside this region's subtree
+   :may-depend [:* Region]}         ; the regions its namespaces may depend on (declared intent)
 
   (law "every cross-region namespace dependency follows a declared :may-depend edge"
     ;; The offender is the EDGE plus the two regions it crosses, so a finding says which dependency
@@ -316,11 +403,16 @@
                (breach ?from ?to ?to-region ?inner)
                (reg-within ?inner ?seal) [(not= ?inner ?seal)])]})
 
-  (law "every namespace belongs to a region, once any region is declared"
+  (law "every namespace belongs to a region, or to a Module one contains, once any region is declared"
     ;; Without it the declaration is opt-in: a namespace no prefix claims is in no region, the
     ;; cross-region law needs both ends in one, and so an unclaimed package depends on anything and
     ;; is depended on by anything while the model stays green. GATED on a Region existing, because a
     ;; project that declares none asserts nothing about coverage.
+    ;;
+    ;; A namespace a PLACED Module pairs with satisfies this, which is not a loophole but the same
+    ;; sentence: that namespace has a position in the hierarchy, reached through the Module rather
+    ;; than through a prefix. An UNPLACED Module satisfies nothing, so adopting a module without
+    ;; containing it leaves coverage exactly where it was.
     {:scope :global
      :offenders [?ns]
      :rules [[(some-region ?r) (is ?r ::Region)]]
@@ -337,6 +429,20 @@
      :where [(is ?r1 ::Region) (prefix ?r1 ?px) (prefix ?r2 ?px) (is ?r2 ::Region)
              (named ?r1 ?n1) (named ?r2 ?n2) [(< ?n1 ?n2)]
              [?px :val/value ?p]]})
+
+  (law "a Module is contained by every region whose prefix claims the namespace it pairs with"
+    ;; The one case the specificity order cannot settle by itself. A placed Module takes its
+    ;; namespace from whatever prefix would otherwise claim it — which is the point where the
+    ;; Module sits inside that region, and a silent hole where it sits somewhere else. The unplaced
+    ;; case needs no law: `module-claims` ignores it, so an unadopted Module removes nothing.
+    ;;
+    ;; Both honest fixes are one line: contain the Module where its code already sits, or narrow
+    ;; the prefix that reaches across it. The offender names both ends because either end can be
+    ;; the wrong one.
+    {:scope :global
+     :offenders [?m ?r]
+     :where [(module-claims ?ns ?m) (region-claims ?ns ?r ?_p)
+             (not (reg-within ?m ?r))]})
 
   (law "every region with a prefix claims at least one namespace"
     ;; A prefix matching nothing is a typo, or a package that moved out from under the claim while

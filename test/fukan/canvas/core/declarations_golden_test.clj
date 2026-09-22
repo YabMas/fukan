@@ -500,8 +500,18 @@
 ;; no-op — which the new law `no :may-depend edge names a region the same declaration already
 ;; contains` reports, once, so the workaround does not outlive the bug. Laws 96→97 (+1, AUTHORED).
 ;; Terms unchanged: both rule sets are law-local, like `breach`, and mint no term.
-(def ^:private golden-terms {:count 179 :hash 1174249065})
-(def ^:private golden-laws  {:count 97 :hash 9061353})
+;; 2026-09-22 (later): a Region MEMBER MAY BE A MODULE — `:child`/`:interior` widen to
+;; `[:* Region Module]`, so one boundary can claim a position and its contents at once, and a
+;; Module is sealed or hidden by being held (`:sealed` stays a Region slot). Terms 179→186 (+7):
+;; `module-claims` with the closure pair the compiler mints (+3), the unary `module-claimed` which
+;; mints none (+1), and one body each on `region-contains` (Module→Module containment, pinned at
+;; BOTH ends), `reg-within` (Module reflexivity — without it a sealed Module is never within
+;; itself, so no crossing is ever attributed to it) and `in-region` (the pairing claim, which
+;; outranks a prefix). The widened slot targets add no law: a union's target-type check is still
+;; one law. Laws 97→98 (+1, AUTHORED): a placed Module must be contained by every region whose
+;; prefix claims the namespace it pairs with — the one case specificity cannot settle.
+(def ^:private golden-terms {:count 186 :hash -1229796599})
+(def ^:private golden-laws  {:count 98 :hash 1660852968})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

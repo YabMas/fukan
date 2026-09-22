@@ -43,9 +43,19 @@
   "All top-level forms in `src` (a Clojure source string). Reads with `*read-eval*`
    off and unknown data-readers tolerated; reading stops at end-of-input. defstructure
    forms are plain data, so they read cleanly; any unusual trailing form simply ends
-   the scan (the staleness test guards against a real miss)."
+   the scan (the staleness test guards against a real miss).
+
+   ⚠ AUTO-RESOLVED KEYWORDS ARE NEUTRALISED FIRST. `::alias/Sort` needs the reading
+   namespace to carry that alias, which this scanner has no reason to build — and the
+   reader does not skip what it cannot read, it THROWS, which ends the scan at that
+   form. A vocabulary that spells a cross-namespace sort the way the authoring surface
+   asks (`::module/Module` in a defrelation body) therefore hid every defstructure
+   BELOW it, silently dropping those structures from the generated config. Stripping
+   the extra colon leaves an ordinary keyword, which is all the scan needs: it reads
+   structure names and `(eq …)` heads, never keywords."
   [src]
-  (let [rdr (java.io.PushbackReader. (java.io.StringReader. src))
+  (let [src (str/replace src #"::" ":")
+        rdr (java.io.PushbackReader. (java.io.StringReader. src))
         eof (Object.)]
     (binding [*read-eval* false
               *default-data-reader-fn* (fn [_tag v] v)]

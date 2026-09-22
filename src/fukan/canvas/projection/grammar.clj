@@ -85,19 +85,25 @@
   ;; :rel/kind is a keyword the mirror stringifies, so re-keywordize it for the slot/* filter + the
   ;; quantifier map. A UNION slot reflects as several edges sharing label + order (alt position on
   ;; the id suffix) — regrouped here into one entry with the alternatives in order.
-  (let [base  (cq/q '[:find ?r ?k ?l ?o ?t :in $ ?s
+  ;; ⚠ ORDERED BY `:rel/id`, NOT BY THE EID. The alt position rides the id's `|j` suffix, and this
+  ;; sorted on `(str ?r)` until 2026-09-22 — which was the same string while an eid WAS that id,
+  ;; and became the eid's digits once eids went native Int. Integers compare lexicographically as
+  ;; strings ("100" < "99"), so a union whose two edges straddled a digit-count boundary rendered
+  ;; its alternatives in the wrong order — `[:* UKind UOp]` for an authored `[:* UOp UKind]`. It
+  ;; surfaced as a test that passed or failed depending on what else was in the db.
+  (let [base  (cq/q '[:find ?rid ?k ?l ?o ?t ?r :in $ ?s
                       :where [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]
-                             [?r :rel/order ?o] [?r :rel/to ?t]] db s)
+                             [?r :rel/order ?o] [?r :rel/to ?t] [?r :rel/id ?rid]] db s)
         pays  (into {} (cq/q '[:find ?r ?p :in $ ?s
                                :where [?r :rel/from ?s] [?r :rel/payload ?p]] db s))
         propm (into {} (cq/q '[:find ?r ?p :in $ ?s
                                :where [?r :rel/from ?s] [?r :rel/props ?p]] db s))]
     (->> base
          (filter #(= "slot" (namespace (keyword (nth % 1)))))
-         (sort-by (fn [[r _ _ o _]] [(ord o) (str r)]))
-         (partition-by (fn [[_ k l _ _]] [k l]))
+         (sort-by (fn [[rid _ _ o _ _]] [(ord o) (str rid)]))
+         (partition-by (fn [[_ k l _ _ _]] [k l]))
          (mapv (fn [rows]
-                 (let [[r k l _ _] (first rows)
+                 (let [[_ k l _ _ r] (first rows)
                        char-props (some-> (propm r) payload-form)
                        pay-props  (when-let [p (pays r)] {:payload (keyword p)})
                        props      (not-empty (merge char-props pay-props))

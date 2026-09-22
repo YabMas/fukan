@@ -12,6 +12,7 @@
             ;; the composition root — registers the Clojure FACT extractor and the Cozo check engine
             [fukan.infra.model]
             [fukan.common.vocab.code.region :as region]
+            [fukan.common.vocab.code.module :as vocab-module]
             [fukan.common.extraction.clojure.module :as clj-module]
             [fukan.common.extraction.clojure.operation :as clj-op]))
 
@@ -296,3 +297,115 @@
       (is (empty? (offenders db "already contains")))
       (is (empty? (offenders db "sealed region"))
           "the owner's crossing into the sealed member is licensed by the edge"))))
+
+;; ── a member may be a Module ─────────────────────────────────────────────────
+;; Which is how one boundary says both of the things a boundary has: a Region claims a POSITION,
+;; a Module claims CONTENTS through its pairing with code. Holding a Module is the only way a
+;; Module is sealed or hidden at all — `:sealed` is a Region slot and stays one.
+
+(declare m-run-fn m-pool-fn)
+(clj-op/Fn ^{:name "m-run-fn"}  m-run-fn)
+(clj-op/Fn ^{:name "m-pool-fn"} m-pool-fn)
+(clj-op/Fn ^{:name "m-core-fn"} m-core-fn {:calls [m-run-fn]})   ; the owner reaching its interior
+(clj-op/Fn ^{:name "m-out-fn"}  m-out-fn  {:calls [m-run-fn]})   ; licensed onto the OWNER only
+(clj-op/Fn ^{:name "m-deep-fn"} m-deep-fn {:calls [m-pool-fn]})  ; …and reaching into its subtree
+
+(clj-module/Ns ^{:name "mm.db.core"}          m-ns-core {:child [m-core-fn]})
+(clj-module/Ns ^{:name "mm.db.execute"}       m-ns-exec {:child [m-run-fn]})
+(clj-module/Ns ^{:name "mm.db.execute.pools"} m-ns-pool {:child [m-pool-fn]})
+(clj-module/Ns ^{:name "mm.dom.use"}          m-ns-out  {:child [m-out-fn]})
+(clj-module/Ns ^{:name "mm.dom.deep"}         m-ns-deep {:child [m-deep-fn]})
+
+;; `execute` pairs with `mm.db.execute` by qualified suffix and `pools` with
+;; `mm.db.execute.pools`: a boundary spanning several namespaces is a Module holding sub-Modules,
+;; each paired 1:1, because the pairing is bijective by law.
+(declare m-pools)
+(vocab-module/Module ^{:name "execute"} m-execute {:child [m-pools]})
+(vocab-module/Module ^{:name "pools"}   m-pools)
+
+(def ^:private module-facts
+  [#'m-run-fn #'m-pool-fn #'m-core-fn #'m-out-fn #'m-deep-fn
+   #'m-ns-core #'m-ns-exec #'m-ns-pool #'m-ns-out #'m-ns-deep
+   #'m-execute #'m-pools])
+
+;; PLACED: the Module is the region's interior.
+(region/Region ^{:name "MPersistence"} m-persistence {:prefix   ["mm.db"]
+                                                      :sealed   true
+                                                      :interior [m-execute]})
+(region/Region ^{:name "MDomain"}      m-domain      {:prefix     ["mm.dom"]
+                                                      :may-depend [m-persistence]})
+
+;; UNPLACED: the same regions, with nobody containing the Module.
+(region/Region ^{:name "UPersistence"} u-persistence {:prefix ["mm.db"] :sealed true})
+(region/Region ^{:name "UDomain"}      u-domain      {:prefix     ["mm.dom"]
+                                                      :may-depend [u-persistence]})
+
+(deftest a-modules-pairing-outranks-the-prefix-that-covers-it
+  (testing "the more specific claim wins, and a pairing names ONE namespace where a prefix names a
+            subtree — so a paired namespace leaves the region whose prefix reaches it while the
+            rest of that subtree stays"
+    (let [db (build/vars->cozo (concat module-facts [#'m-persistence #'m-domain]))]
+      (is (= #{["mm.db.core"          "MPersistence"]
+               ["mm.db.execute"       "execute"]
+               ["mm.db.execute.pools" "pools"]
+               ["mm.dom.use"          "MDomain"]
+               ["mm.dom.deep"         "MDomain"]}
+             (membership db)))
+      (is (empty? (offenders db "belongs to a region"))
+          "a namespace a placed Module claims is covered — through the Module, not through a prefix")
+      (is (empty? (offenders db "contained by every region"))
+          "and nothing is ambiguous: the Module sits inside the region whose prefix reaches it"))))
+
+(deftest a-module-held-as-an-interior-is-sealed
+  (testing "MDomain holds a declared edge onto MPersistence and still may not reach what
+            MPersistence hides — the sentence a seal exists to say, now said about a Module. Both
+            crossings are reported against `execute`: `pools` is contained but seals nothing of its
+            own, so the seal drawn around the boundary covers its whole subtree."
+    (let [db (build/vars->cozo (concat module-facts [#'m-persistence #'m-domain]))]
+      (is (= #{["mm.dom.use"  "mm.db.execute"       "execute"]
+               ["mm.dom.deep" "mm.db.execute.pools" "execute"]}
+             (offenders db "sealed region"))))))
+
+(deftest the-owner-reaches-the-module-it-contains
+  (testing "containment implies reach for a Module member exactly as for a region one — the owner's
+            own call into its interior is neither a breach nor an undeclared dependency"
+    (let [db (build/vars->cozo (concat module-facts [#'m-persistence #'m-domain]))
+          rows (offenders db "cross-region")]
+      (is (empty? (filter #(= "mm.db.core" (first %)) rows))))))
+
+(deftest an-unplaced-module-claims-nothing
+  (testing "declaring a Module is inert for membership until somebody contains it, so adopting a
+            module and moving a boundary are two changes and the first moves no number. The
+            crossing MDomain's edge licenses stays licensed — placing the Module is exactly what
+            takes that licence away."
+    (let [db (build/vars->cozo (concat module-facts [#'u-persistence #'u-domain]))]
+      (is (= #{["mm.db.core"          "UPersistence"]
+               ["mm.db.execute"       "UPersistence"]
+               ["mm.db.execute.pools" "UPersistence"]
+               ["mm.dom.use"          "UDomain"]
+               ["mm.dom.deep"         "UDomain"]}
+             (membership db))
+          "every namespace stays where the prefixes put it")
+      (is (empty? (offenders db "sealed region")))
+      (is (empty? (offenders db "contained by every region")))
+      (is (empty? (offenders db "belongs to a region"))))))
+
+;; ── the one case specificity cannot settle ───────────────────────────────────
+
+(clj-op/Fn ^{:name "hz-fn"} hz-fn)
+(clj-module/Ns ^{:name "hz.db.hzexec"} hz-ns  {:child [hz-fn]})
+(clj-module/Ns ^{:name "hz.dom.app"}   hz-ns2)
+(vocab-module/Module ^{:name "hzexec"} hz-module)
+(declare hz-persistence)
+(region/Region ^{:name "HzDomain"}      hz-domain      {:prefix ["hz.dom"] :child [hz-module]})
+(region/Region ^{:name "HzPersistence"} hz-persistence {:prefix ["hz.db"]})
+
+(deftest a-module-placed-outside-the-region-whose-prefix-claims-it-is-reported
+  (testing "the Module takes `hz.db.hzexec` out of HzPersistence's claim while sitting under
+            HzDomain — a hole punched in one region by a declaration in another. Both ends are in
+            the finding because either can be the wrong one: contain the Module where its code
+            already sits, or narrow the prefix that reaches across it."
+    (let [db (build/vars->cozo [#'hz-fn #'hz-ns #'hz-ns2 #'hz-module #'hz-domain #'hz-persistence])]
+      (is (= #{["hzexec" "HzPersistence"]}
+             (offenders db "contained by every region"))))))
+
