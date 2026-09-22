@@ -21,9 +21,13 @@
    ⚠ THIS TIER REACHES A LANGUAGE HERE (as `Region` does). `Ns` is a Clojure fact sort, and this
    file names it — by FULL TAG KEYWORD, the documented spelling for a namespace deliberately not
    required, so the coupling is at the DATA level and not the compile level. `ns-depends` and the
-   rest reach it the same way, through datalog injection. A project with a different extractor loads
-   this vocab, mints no `Ns` nodes, and gets laws that are vacuous rather than laws that fail — which
-   is the right failure, but it is still a language leaking into a tier that claims to be neutral.
+   rest reach it the same way, through datalog injection. A project with a different extractor does
+   NOT get vacuous laws, which this claimed until 2026-09-22 and measurement refuted: without the
+   Clojure extraction tier the sort is unregistered and `ns-depends` is absent, so the conformance
+   and coverage laws are UNDECIDABLE — exit 2. That is the honest answer (a sentence about
+   namespaces cannot be decided where namespaces are not a thing) but it is not vacuity, and it is
+   still a language leaking into a tier that claims to be neutral. Vacuity is what a DESIGN-ONLY
+   build gets — the tier loaded, no code extracted — and the difference is sort registration.
    The honest fix is an extractor-neutral CODE-UNIT sort for every language to populate; inventing
    one before a second extractor exists would be designing a middle layer ahead of its case, so this
    carries the debt in the open instead. A second extractor is the trigger.

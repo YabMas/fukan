@@ -62,9 +62,19 @@
 
    ⚠ THIS TIER REACHES A LANGUAGE HERE (as `Band` does). `Ns` is a Clojure fact sort, named by FULL
    TAG KEYWORD — the documented spelling for a namespace deliberately not required, so the coupling
-   is at the data level and not the compile level. A project with a different extractor mints no
-   `Ns` nodes and gets vacuous laws rather than failing ones. The honest fix is an extractor-neutral
-   code-unit sort, and a second extractor is its trigger."
+   is at the data level and not the compile level.
+
+   WHAT THAT COSTS A PROJECT THAT IS NOT CLOJURE, measured rather than assumed, because this said
+   the wrong thing until 2026-09-22 (it promised vacuous laws): with the Clojure extraction tier
+   LOADED and no code extracted, these laws are vacuous and green — that is the design-only build,
+   and the distinction that makes it work is that the SORT is registered, not that any namespace
+   exists. Without that tier at all, four of them are UNDECIDABLE: `(is ?ns Ns)` cannot compile
+   against a sort nobody registered, which drops `region-claims`, and `ns-depends` is the
+   extractor's rule and is simply absent. That is exit 2, and it is the honest answer rather than a
+   defect — a law about namespaces cannot be decided where namespaces are not a thing, and a green
+   verdict there would be a claim nobody checked. A project with a different extractor should
+   expect this vocabulary to report as unevaluated, not as satisfied. The fix is the
+   extractor-neutral code-unit sort, and a second extractor is its trigger."
   (:require [clojure.string :as str]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.cozo.query :as cq]))

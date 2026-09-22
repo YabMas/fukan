@@ -21,8 +21,11 @@
    never reach a project's model.
 
    ⚠ Like `band`, this reads the Clojure extraction's `ns-depends` and the `Module ↦ Ns` pairing by
-   NAME, not by require. A project with a different extractor mints neither and gets vacuous laws
-   rather than a load error; the extractor-neutral code-unit sort that would retire both
+   NAME, not by require. A project with a different extractor mints neither, and what it gets is
+   not a load error and not vacuity (which this claimed until 2026-09-22): the laws naming those
+   rules are UNDECIDABLE, because a rule nobody declares is absent rather than empty. Exit 2, and
+   honest — unevaluated is what they are. Vacuity is the design-only build, where the tier is
+   loaded and no code was extracted. The extractor-neutral code-unit sort that would retire both
    exceptions waits for a second extractor."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [fukan.common.vocab.code.module :refer [Module]]))
