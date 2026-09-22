@@ -28,6 +28,13 @@
    interior). A boundary data-shape needs no flag either: adoption is readable from the graph
    (another module's signatures naming the Kind — `module-depends`' data-adoption clause).
 
+   NO `:may-depend`, and that absence is the sort's meaning rather than a gap. A Module is the
+   ELEMENT the groupings group — `Subsystem` and `Stratum` take Modules as members, and since
+   2026-09-22 a `Region` may hold one as `:child` or `:interior` — so reach is declared by the
+   grouping, and a Module held inside one inherits its container's outward edges through the
+   ancestry lift. An interior needing an outbound policy of its own is a Region; giving Module a
+   reach slot would make it a peer of the things that group it.
+
    PURE IDENTITY — Module is the ROOT of the correspondence twin ladder, but its carrier
    relation hooks in from OUTSIDE via `(correspond Module …)` in the language extractor. The
    pattern tier above (`vocab/patterns/`) also names its own participation (`PlugPoint :owner`);
