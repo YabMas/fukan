@@ -22,10 +22,14 @@
      :performs  [:state]})
   (Operation cvar "A datalog var → its CozoScript name (?e → e)."
     {:signature [:=> [:catn [:t :any]] :string]})
+  (Operation compiled-generation "What the compiled world is made of — the kernel's vocabulary generation paired with the engine's port generation. ONE answer to `has the vocabulary moved`, so the caches derived from the rules cannot disagree about it."
+    {:signature [:=> [:cat] [:vector :int]]
+     :performs  [:state]                           ; reads the vocab registry + the port counter
+     :delegates [kstructure/vocabulary-generation]})
   (Operation vocab-index "The vocabulary's rules compiled into a name→{:lines :refs} index (+ the synthetic fn-predicate rules), held against the generation and bucket index it was compiled from."
     {:signature [:=> [:cat] :any]
      :performs  [:throws :state]                   ; reads vocab registries; may reject unsupported forms
-     :delegates [kstructure/vocab-rules kstructure/vocabulary-generation]})
+     :delegates [compiled-generation kstructure/vocab-rules]})
   (Operation compile-body "Compile where-clauses + caller rules + outer-scope vars (find vars / law offenders — they count toward inline-measure grouping inference) → [rule-lines body-str], emitting the reachable vocab rules. A PURE compiler (content-named helpers, threaded wildcard counter, lifted-measure aux rules)."
     {:signature [:=> [:catn [:where :any] [:rules :any] [:index :any] [:outer-vars :any]] :any]
      :performs  [:throws]

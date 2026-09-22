@@ -9,6 +9,8 @@
             [fukan.infra.model]
             [fukan.model.pipeline :as pipeline]
             [fukan.cozo.db :as db]
+            [fukan.cozo.mirror :as mirror]
+            [fukan.canvas.core.structure :refer [defstructure]]
             [fukan.cozo.law :as law]))
 
 (deftest compiles-a-not-join-cardinality-law
@@ -129,3 +131,54 @@
           (is (re-find #"per-law budget" (ex-message e)))
           (is (= ["the slow one"] (mapv :law (:unsupported (ex-data e))))
               "the offending law names itself, which is the whole point of the bound"))))))
+
+;; ── the memo on `check-structural` ───────────────────────────────────────────
+;; Every law runs on every call and a consumer has no way to see that: brian's design check spent
+;; half of its 105 seconds re-deciding a model it had already decided, because its report counted
+;; three laws and called `check` once per count. The memo costs nothing to be right about and the
+;; tests below are about the ways it could be WRONG, because a stale hit here is a false green —
+;; the one output this project treats as worse than being slow.
+
+(defstructure MemoThing
+  "Fixture: one law that fires for a node carrying the flag."
+  {:flagged [:? :boolean]}
+  (law "nothing is flagged"
+    {:offenders [?x] :where [(is ?x ::MemoThing) [?x :val/flagged true]]}))
+
+(defn- memo-db
+  "A db holding one unflagged MemoThing — green, and writable in place."
+  []
+  (mirror/load-datoms [[1 :structure/of ::MemoThing] [1 :entity/name "memo-thing"]]))
+
+(deftest a-second-check-of-an-unchanged-model-is-the-first-answer
+  (testing "the same vector object comes back — the evaluation happened once"
+    (let [cdb (memo-db)]
+      (try (is (identical? (law/check-structural cdb) (law/check-structural cdb)))
+           (finally (db/close cdb))))))
+
+(deftest a-write-to-the-model-is-not-served-from-the-memo
+  (testing "THE false-green test. `insert-datoms` writes in place and the db handle does not
+            change, so a memo keyed on the handle alone would answer green about a model that has
+            since acquired an offender. `query/buckets-of` re-derives on `db/write-generation`,
+            which is what this key rides."
+    (let [cdb (memo-db)]
+      (try
+        (is (empty? (filter :offenders (law/check-structural cdb))) "green before the write")
+        (mirror/insert-datoms cdb [[2 :structure/of ::MemoThing] [2 :entity/name "flagged-thing"]
+                                   [2 :val/flagged true]])
+        (is (seq (filter :offenders (law/check-structural cdb)))
+            "the offender the write introduced is reported, not cached away")
+        (finally (db/close cdb))))))
+
+(deftest the-budget-is-part-of-the-key
+  (testing "a budget is part of the VERDICT, not of the question: the same laws over the same
+            model decide or fail to decide depending on it, so a green answer must not be served
+            to a caller asking under a budget that cannot reach it"
+    (let [cdb (memo-db)]
+      (try
+        (is (empty? (law/check cdb)) "decided, under the default budget")
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (binding [law/*law-budget-ms* 1] (law/check cdb)))
+            "and undecidable under a budget of 1ms — the memo does not answer for it")
+        (is (empty? (law/check cdb)) "and the real budget still decides afterwards")
+        (finally (db/close cdb))))))

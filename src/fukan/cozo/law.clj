@@ -126,23 +126,37 @@
         (do (.interrupt t) ::over-budget)))
     (f)))
 
-(defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
-  check-structural
-  "Run every law over the Cozo db `cdb`, returning `[{:structure :law :offenders}]` (offenders
-   = matched eid tuples, native handles) for laws that fire, `{:structure :law :unsupported true
-   :stage :reason}` for laws whose form (or a vocab rule they read) isn't compiled yet — `:stage`
-   says whether the COMPILER refused it or Cozo did, `:reason` is that refusal's own message,
-   because a flag with no cause sends the reader off to call `compile-law` by hand — and
-   `{:structure :law :over-budget true}` for one that outran `*law-budget-ms*`. A type-check law
-   runs the hybrid (`value-offenders`); everything else compiles to CozoScript and runs.
+(def ^:private structural-cache
+  "The last `check-structural` result, with what it was computed FROM — the same three things any
+   answer about this model depends on:
+
+     `query/compiled-generation` — the vocabulary and the registered predicate ports. Declaring a
+       structure, a correspondence or a port bumps it, and the compiled rule index keys on the
+       same value, so the two caches cannot disagree about whether the vocabulary moved.
+     the db's BUCKET MAP, compared by `identical?` — `query/buckets-of` hands out one map per db
+       and re-derives it whenever `db/write-generation` moves, so a db that was written to (in
+       place, same handle — the case that made the bucket index itself go stale in August) hands
+       back a different map and misses here.
+     `*law-budget-ms*` — a budget is part of the VERDICT, not of the question: the same laws over
+       the same model decide or fail to decide depending on it.
+
+   A memo on `check` is a different animal from a memo on a compiled rule, and the reason to be
+   careful is that being wrong here is a FALSE GREEN — the one output this project treats as worse
+   than being slow. What makes it safe is that the key is the key the rule cache already trusts: if
+   it could go stale, the compiled rules it serves would already be stale, and every answer with
+   them."
+  (atom nil))
+
+(defn- run-laws
+  "Evaluate every law over `cdb` — the uncached body of `check-structural`, which holds the
+   docstring that says what the result means.
 
    The vocab index is compiled INSIDE the bucket binding, with the same map every law then
    compiles against: a rule compiled with no bucket index in force reads a three-way union helper
    for every attribute instead of the one stored relation that holds it — and the index compiled
    outside would also miss the memo the laws go on to hit."
-  [cdb]
-  (let [buckets (query/buckets-of cdb)
-        index   (binding [query/*attr-buckets* buckets] (query/vocab-index))
+  [cdb buckets]
+  (let [index   (binding [query/*attr-buckets* buckets] (query/vocab-index))
         fired   (fn [tag law rows]
                   (cond-> {:structure tag :law (:desc law) :vars (vec (:offenders law))}
                     (:key law)  (assoc :key (:key law))
@@ -170,6 +184,36 @@
                      (map? rows)            rows
                      (= rows ::over-budget) {:structure tag :law (:desc law) :over-budget true}
                      :else                  (fired tag law rows))))))))))
+
+(defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
+  check-structural
+  "Run every law over the Cozo db `cdb`, returning `[{:structure :law :offenders}]` (offenders
+   = matched eid tuples, native handles) for laws that fire, `{:structure :law :unsupported true
+   :stage :reason}` for laws whose form (or a vocab rule they read) isn't compiled yet — `:stage`
+   says whether the COMPILER refused it or Cozo did, `:reason` is that refusal's own message,
+   because a flag with no cause sends the reader off to call `compile-law` by hand — and
+   `{:structure :law :over-budget true}` for one that outran `*law-budget-ms*`. A type-check law
+   runs the hybrid (`value-offenders`); everything else compiles to CozoScript and runs.
+
+   MEMOIZED on the model, the vocabulary and the budget (see `structural-cache`), because every
+   law runs on every call and a consumer has no way to see that. A report counting three laws
+   paid three full evaluations: brian's design check spent HALF its 105 seconds re-deciding a
+   model it had already decided, which nothing in the API told it. One entry, so alternating
+   between two models simply misses and pays what it always paid.
+
+   ⚠ AN OVER-BUDGET VERDICT IS CACHED TOO, which is a real change: a law that outran the budget
+   once no longer gets a second roll of the dice on a retry. That is the honest reading of the
+   budget — it is part of the verdict, and the key says so — but a caller who wants the retry
+   wants a different budget, which misses the memo by construction."
+  [cdb]
+  (let [buckets (query/buckets-of cdb)
+        k       [(query/compiled-generation) *law-budget-ms*]
+        c       @structural-cache]
+    (if (and c (= k (:key c)) (identical? buckets (:buckets c)))
+      (:results c)
+      (let [results (run-laws cdb buckets)]
+        (reset! structural-cache {:key k :buckets buckets :results results})
+        results))))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   check
