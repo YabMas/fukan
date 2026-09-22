@@ -107,3 +107,39 @@
                           :where (offers ?m ?c) [?m :entity/name ?mn] [?c :entity/name ?cn]]
                         db (s/vocab-rules))))
           "(offers ?m ?p) — the derived converse — reads at domain altitude"))))
+
+;; ── every authored law in the shipped vocabulary is ADDRESSABLE ──────────────
+;; A consumer reaching a law by its DESCRIPTION fails two ways, both silent: reword the sentence
+;; and their match finds nothing, so every count is zero and the report reads green; add a law and
+;; a report enumerating the ones it knows about says nothing about it. `law/violation-rows` takes a
+;; stable `:key` and THROWS on one it does not know, which is the difference between a consumer
+;; that breaks and one that lies. brian hit both halves in one week, which is why this is a test
+;; rather than a convention.
+;;
+;; GENERATED laws carry no key and want none — a slot's target-type or cardinality check is
+;; addressed through the slot it came from, and there is one per slot in the model.
+
+(deftest every-authored-vocab-law-carries-a-key
+  (testing "the shipped vocabulary's own laws are addressable by key, not by prose"
+    (let [authored (for [sdef (s/all-structures)
+                         :let [ns' (or (namespace (:tag sdef)) (:ns sdef))]
+                         :when (and ns' (str/starts-with? ns' "fukan.common"))
+                         law  (:laws sdef)]
+                     [(:tag sdef) (:desc law) (:key law)])
+          keyless  (remove #(nth % 2) authored)]
+      (is (seq authored) "precondition: the shipped vocabulary declares laws")
+      (is (empty? keyless)
+          (str "authored laws with no :key — a consumer can only reach these by matching their "
+               "description, which goes silently green when the description is reworded: "
+               (pr-str (vec keyless)))))))
+
+(deftest a-law-key-names-exactly-one-law
+  (testing "keys are the addressing surface, so two laws sharing one would make a worklist
+            answer for both — the registry guard refuses a duplicate, and this is its witness"
+    (let [keys' (for [sdef (s/all-structures)
+                      law  (:laws sdef)
+                      :when (:key law)]
+                  (:key law))]
+      (is (= (count keys') (count (distinct keys')))
+          (str "duplicate law keys: "
+               (pr-str (->> keys' frequencies (filter #(> (val %) 1)) (map key) vec)))))))

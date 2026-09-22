@@ -3,12 +3,9 @@
    namespace graph. What has to hold: an edge out of a level is legal only along a declared
    `:rests-on`, transitively resting on a level licenses nothing, and a module in no stratum is
    unconstrained — there is no coverage law."
-  (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.core.structure :as s]
+  (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.law :as law]
-            [fukan.cozo.query :as cq]
             ;; the composition root — registers the Clojure FACT extractor and the Cozo check engine
             [fukan.infra.model]
             [fukan.common.vocab.code.module :as module]
@@ -16,17 +13,13 @@
             [fukan.common.extraction.clojure.module :as clj-module]
             [fukan.common.extraction.clojure.operation :as clj-op]))
 
-(defn- law-desc [substr]
-  (->> (:laws (s/structure-by-tag :fukan.common.vocab.code.stratum/Stratum))
-       (map :desc) (filter #(str/includes? % substr)) first))
-
-(defn- offenders [db substr]
-  (let [desc (law-desc substr)]
-    (assert desc (str "no Stratum law mentions " (pr-str substr)))
-    (->> (law/check db) (filter #(= desc (:law %)))
-         (mapcat :offenders)
-         (map (fn [row] (mapv #(:entity/name (cq/entity db %)) row)))
-         set)))
+(defn- offenders
+  "Offender rows of the law keyed `k`, each cell resolved to its name. Addressed by KEY, not by a
+   substring of the description: an unknown key throws, where a description that has been reworded
+   upstream silently matches nothing — and a test asserting `empty?` would then pass for the wrong
+   reason, which is the failure this whole surface exists to prevent."
+  [db k]
+  (law/violation-rows db k))
 
 ;; ── three levels and a bystander: ui over core over base, misc in no stratum ──
 ;; ui calls core (declared) and base (a reach past core); core calls base (declared) and back up
@@ -62,7 +55,7 @@
 
 (deftest an-edge-out-of-a-level-follows-a-declared-rests-on
   (let [db (build/vars->cozo (into code-vars strata))
-        found (offenders db "follows a declared :rests-on")]
+        found (offenders db :stratum/undeclared-dependency)]
     (testing "core calling back up into ui is an offending edge, named with both levels"
       (is (contains? found ["app.core" "app.ui" "Core" "Ui"])))
     (testing "ui resting on core does not license a call into base: reaching past a level is
@@ -81,14 +74,14 @@
 (deftest declaring-the-skip-makes-it-a-decision
   (let [db (build/vars->cozo (into code-vars [#'t-base #'t-core #'t-ui-declared]))]
     (is (= #{["app.core" "app.ui" "Core" "UiDeclared"]}
-           (offenders db "follows a declared :rests-on"))
+           (offenders db :stratum/undeclared-dependency))
         "once Ui states that it rests on Base directly, its call into base is the design")))
 
 (stratum/Stratum ^{:name "CoreAgain"} t-core-again {:provided-by [t-mod-core]})
 
 (deftest a-module-provides-one-level
   (let [db (build/vars->cozo (into code-vars (conj strata #'t-core-again)))]
-    (is (= #{["core"]} (offenders db "at most one Stratum")))))
+    (is (= #{["core"]} (offenders db :stratum/module-in-two-strata)))))
 
 (declare t-cyc-b)
 (stratum/Stratum ^{:name "CycA"} t-cyc-a {:provided-by [t-mod-misc] :rests-on [t-cyc-b]})
@@ -96,12 +89,12 @@
 
 (deftest a-level-written-in-itself-is-incoherent
   (let [db (build/vars->cozo [#'t-mod-misc #'t-mod-base #'t-cyc-a #'t-cyc-b])]
-    (is (= #{["CycA"] ["CycB"]} (offenders db "acyclic")))))
+    (is (= #{["CycA"] ["CycB"]} (offenders db :stratum/rests-on-cyclic)))))
 
 (deftest a-project-that-declares-no-stratum-is-asserting-nothing
   (testing "every law is vacuous without a declared stratum, so loading `fukan.common` cannot turn
             an existing consumer's check red"
     (let [db (build/vars->cozo code-vars)]
-      (is (empty? (offenders db "follows a declared :rests-on")))
-      (is (empty? (offenders db "at most one Stratum")))
-      (is (empty? (offenders db "acyclic"))))))
+      (is (empty? (offenders db :stratum/undeclared-dependency)))
+      (is (empty? (offenders db :stratum/module-in-two-strata)))
+      (is (empty? (offenders db :stratum/rests-on-cyclic))))))

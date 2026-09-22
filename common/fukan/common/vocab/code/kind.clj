@@ -19,7 +19,8 @@
   {:shape [:? Schema]}                          ; its shape, when it has one (authored positionally)
   (syntax shape->slots)                         ; positional malli body → the :shape slot
   (law "a Kind is a member of at most one Module"
-    {:offenders [?k]
+    {:key :kind/owned-twice
+     :offenders [?k]
      ;; the full tag keyword: `module` requires `kind` (Module's :child names Kind), so the
      ;; symbol form would need a cyclic require — `is` resolution rides the acyclic ns graph.
      :rules [[(kind-home ?k ?m) (is ?m :fukan.common.vocab.code.module/Module)

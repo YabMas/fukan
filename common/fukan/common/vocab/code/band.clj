@@ -71,6 +71,7 @@
     ;; are what a consumer labels the columns with, so `?from`/`?to` renders as a finding an
     ;; agent can act on where `?a`/`?b` renders as four names in a line.
     {:scope :global
+     :key :band/undeclared-dependency
      :offenders [?from ?to ?from-band ?to-band]
      :rules [[(declared-dep ?s ?t) (is ?s ::Band) (may-depend ?s ?t)]]
      :where [(ns-depends ?from ?to)
@@ -90,6 +91,7 @@
     ;; the blindness above wearing a declaration. (At least one band, not exactly one: a Band's
     ;; membership is a covering.)
     {:scope :global
+     :key :band/namespace-unclaimed
      :offenders [?ns]
      :rules [[(some-band ?b) (is ?b ::Band)]]
      :where [(some-band ?_b)
@@ -97,7 +99,8 @@
              (not-join [?ns] (in-band ?ns ?b))]})
 
   (law "the :may-depend graph is acyclic — no band transitively depends on itself"
-    {:offenders [?band]
+    {:key :band/may-depend-cyclic
+     :offenders [?band]
      :rules [[(band-reaches ?s ?t) (may-depend ?s ?t)]
              [(band-reaches ?s ?t) (may-depend ?s ?mid) (band-reaches ?mid ?t)]]
      :where [(band-reaches ?band ?band)]}))

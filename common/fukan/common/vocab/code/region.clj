@@ -324,6 +324,7 @@
     ;; reaching its container, or a sibling, is an ordinary crossing and stays reported. A seal
     ;; overrides it, which is what makes `:child` + `:sealed` the way to demand a stated edge.
     {:scope :global
+     :key :region/undeclared-dependency
      :offenders [?from ?to ?from-region ?to-region]
      :rules [[(declared-dep ?fr ?tr)
               (reg-within ?fr ?fa) (reg-within ?tr ?ta) (may-depend ?fa ?ta)]
@@ -354,7 +355,8 @@
     ;; `:interior` member seals too, but licenses its owner's subtree by being an interior, so
     ;; there the edge really is saying nothing twice over. `licensed-anyway` is that distinction
     ;; and nothing more: the two licences `seal-licensed` grants without an edge.
-    {:offenders [?r ?t]
+    {:key :region/redundant-may-depend
+     :offenders [?r ?t]
      :rules [[(licensed-anyway ?r ?s) (interior ?owner ?s) (reg-within ?r ?owner)]
              [(licensed-anyway ?r ?s) (reg-within ?r ?s)]
              ;; containment rides INSIDE the rule: `?r` reaches this body only through the
@@ -390,6 +392,7 @@
     ;; not the inner one still breaches the inner seal, and an outer seal it does not breach was
     ;; never going to report it.
     {:scope :global
+     :key :region/seal-breached
      :offenders [?from ?to ?seal]
      :rules [[(breach ?from ?to ?tr ?s)
               ;; the EDGE rides inside the rule rather than being joined to it outside. `?from`
@@ -414,6 +417,7 @@
     ;; than through a prefix. An UNPLACED Module satisfies nothing, so adopting a module without
     ;; containing it leaves coverage exactly where it was.
     {:scope :global
+     :key :region/namespace-unclaimed
      :offenders [?ns]
      :rules [[(some-region ?r) (is ?r ::Region)]]
      :where [(some-region ?_r)
@@ -425,6 +429,7 @@
     ;; when they are the same string, no rule can prefer either region, and the namespace would
     ;; sit in both. Ordered by name so one conflict is one finding.
     {:scope :global
+     :key :region/prefix-ambiguous
      :offenders [?r1 ?r2 ?p]
      :where [(is ?r1 ::Region) (prefix ?r1 ?px) (prefix ?r2 ?px) (is ?r2 ::Region)
              (named ?r1 ?n1) (named ?r2 ?n2) [(< ?n1 ?n2)]
@@ -440,6 +445,7 @@
     ;; the prefix that reaches across it. The offender names both ends because either end can be
     ;; the wrong one.
     {:scope :global
+     :key :region/module-uncontained
      :offenders [?m ?r]
      :where [(module-claims ?ns ?m) (region-claims ?ns ?r ?_p)
              (not (reg-within ?m ?r))]})
@@ -451,6 +457,7 @@
     ;; green. Gated on a namespace existing, so a design-only build reports nothing rather than
     ;; reporting every region for the absence of code that was never extracted.
     {:scope :global
+     :key :region/prefix-claims-nothing
      :offenders [?r]
      :rules [[(some-ns ?ns) (is ?ns :fukan.common.extraction.clojure.module/Ns)]]
      :where [(some-ns ?_ns)
@@ -458,7 +465,8 @@
              (not-join [?r] (in-region ?ns2 ?r))]})
 
   (law "the :may-depend graph is acyclic — no region can reach itself"
-    {:offenders [?region]
+    {:key :region/may-depend-cyclic
+     :offenders [?region]
      :rules [[(region-reaches ?s ?t) (may-depend ?s ?t)]
              [(region-reaches ?s ?t) (may-depend ?s ?mid) (region-reaches ?mid ?t)]]
      :where [(region-reaches ?region ?region)]}))
