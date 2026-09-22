@@ -22,11 +22,11 @@
      :performs  [:state :throws]
      :delegates [cquery/compile-body cquery/cvar kstructure/pin-clause]})
   (Operation check-structural
-    "Run every law over the Cozo db, returning offenders (or :unsupported for laws whose form isn't compiled yet). Compiles each law to CozoScript, except the scalar TYPE-CHECK laws, which run a HYBRID — Cozo finds each instance's leaf value, typing/value-valid? (malli) checks it. The Cozo analog of structure/check."
+    "Run every law over the Cozo db, returning offenders (or :unsupported for laws whose form isn't compiled yet). Compiles each law to CozoScript, except the scalar TYPE-CHECK laws, which run a HYBRID — Cozo finds each instance's leaf value, typing/value-valid? (malli) checks it. MEMOIZED on the model, the vocabulary and the budget: every law runs on every call and a consumer cannot see that, so a report counting three laws paid three evaluations. The Cozo analog of structure/check."
     {:signature [:=> [:catn [:cdb db/CozoDb]] :any]
      :performs  [:state :throws]
-     :delegates [kstructure/all-structures cquery/vocab-index
-                 ktyping/value-valid? db/q]})
+     :delegates [cquery/compiled-generation cquery/buckets-of kstructure/all-structures
+                 cquery/vocab-index ktyping/value-valid? db/q]})
   (Operation check
     "Run every law over the Cozo db and return its VIOLATIONS — the drift list (the violation-only view of check-structural). THE check: it evaluates the laws the kernel defines. Fails closed when any law is unsupported, because an unevaluated constraint cannot establish satisfaction."
     {:signature  [:=> [:catn [:cdb db/CozoDb]] :any]

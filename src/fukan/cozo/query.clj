@@ -150,6 +150,15 @@
    under (the kernel's half is `structure/vocabulary-generation`)."
   (atom 0))
 
+(defn ^{:malli/schema [:=> [:cat] [:vector :int]]}
+  compiled-generation
+  "What the compiled world is made of: the kernel's vocabulary generation and the engine's port
+   generation. Anything derived from the rules — the compiled index here, the law results in
+   `cozo/law` — keys its memo on this, so there is ONE answer to `has the vocabulary moved` and
+   two caches cannot disagree about it."
+  []
+  [(structure/vocabulary-generation) @port-generation])
+
 (def ^:private predicate-registry
   "Clojure fn-predicate symbol → a builder `(arg-terms) → [cozo-fragment refs]`. Seeded with GENERIC
    ports only; vocab registers domain predicates via `register-predicate-port!`.
@@ -664,7 +673,7 @@
    query's cost went here. Registering a structure, a correspondence or a predicate port bumps the
    generation, and a rebuilt db hands out a new bucket map, so a stale index cannot be served."
   []
-  (let [gen [(structure/vocabulary-generation) @port-generation]
+  (let [gen (compiled-generation)
         c   @vocab-index-cache]
     (if (and c (= gen (:gen c)) (identical? *attr-buckets* (:buckets c)))
       (:index c)
