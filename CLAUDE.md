@@ -179,9 +179,15 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   **PURE DESIGN — language-neutral**, with ONE stated exception, carried by three elements:
   `region` and `band` name the Clojure `Ns` sort, and `stratum` reads `ns-depends` and the
   `Module ↦ Ns` pairing (all by name, the documented spelling for a deliberate non-require),
-  because each one's whole point is that its evidence is the EXTRACTED call graph. A non-Clojure
-  project gets vacuous laws rather than a load error; the honest fix is an extractor-neutral
-  code-unit sort, and a second extractor is the trigger to build one. `Region` supersedes `Band` —
+  because each one's whole point is that its evidence is the EXTRACTED call graph. ⚠ A non-Clojure
+  project does NOT get vacuous laws (measured 2026-09-22, which is when this line stopped claiming
+  it): without the Clojure extraction tier the sort is unregistered and `ns-depends` is absent, so
+  those laws are UNDECIDABLE — exit 2, not a load error and not green. That is the honest answer
+  (a sentence about namespaces cannot be decided where namespaces are not a thing, and green would
+  be a claim nobody checked), and vacuity is what the DESIGN-ONLY build gets — the tier loaded, no
+  code extracted. The difference is sort registration, not data. The honest fix is an
+  extractor-neutral code-unit sort, and a second extractor is the trigger to build one.
+  `Region` supersedes `Band` —
   its membership is a partition where Band's is a covering, and it claims no layering — and Band
   ships only while existing canvases still author it. Each element
   file carries its structure and the laws that are its own slot semantics, and knows nothing about
