@@ -11,9 +11,10 @@
      (Name sym \"doc\"? {…} nested…)      → (declare sym …kids)   ; def-emitting: vars resolve
      (Name \"doc\"? {…})                  → (Name \"doc\"?)         ; expression: body dropped
 
-   Each generated instance macro is registered against `instance` in
-   .clj-kondo/config.edn by its fully-qualified name (clj-kondo can't discover
-   the dynamically-generated macros)."
+   Each generated instance macro is registered against `instance` by its
+   fully-qualified name (clj-kondo can't discover the dynamically-generated
+   macros), in the config beside this file — shipped to consumers as fukan's
+   clj-kondo export, and merged into fukan's own `.clj-kondo/config.edn`."
   (:require [clj-kondo.hooks-api :as api]))
 
 (defn defstructure

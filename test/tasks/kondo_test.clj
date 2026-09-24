@@ -73,3 +73,22 @@
             (regenerate with `clojure -M:kondo` if this fails)"
     (is (= (kondo/generated-config kondo/default-dirs)
            (clojure.edn/read-string (slurp ".clj-kondo/generated/config.edn"))))))
+
+;; ── the shipped export: what a consumer's clj-kondo imports ──────────────────
+
+(deftest export-config-covers-exactly-the-shipped-surface
+  (let [hooks (get-in (kondo/export-config) [:hooks :analyze-call])]
+    (testing "the defining macros are hooked, so a consumer's own defstructure lints"
+      (is (= 'hooks.fukan.structure/defstructure
+             (get hooks 'fukan.canvas.core.structure/defstructure))))
+    (testing "shipped vocab constructors are hooked"
+      (is (= 'hooks.fukan.structure/instance
+             (get hooks 'fukan.common.vocab.code.region/Region))))
+    (testing "self-model and test-fixture structures are not — no consumer can reach them"
+      (is (not-any? #(re-find #"-test$" (namespace %)) (keys hooks))))))
+
+(deftest export-config-file-is-current
+  (testing "the committed export config matches a fresh scan
+            (regenerate with `clojure -M:kondo` if this fails)"
+    (is (= (kondo/export-config)
+           (clojure.edn/read-string (slurp kondo/export-config-path))))))

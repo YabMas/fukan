@@ -549,9 +549,13 @@ called. When adding a namespace to one file's list, add it to the other.
 `:hooks` — one generic `hooks.fukan.structure/instance` hook that every per-structure
 instance-constructor macro routes to. Those per-structure `:analyze-call` entries are
 **generated, not hand-written**: `tasks.kondo` scans the defstructure forms and writes
-`.clj-kondo/generated/config.edn` (merged into `.clj-kondo/config.edn` via
-`:config-paths`). After adding or removing a structure, run `clojure -M:kondo` to
-regenerate; the `tasks.kondo-test/generated-config-file-is-current` test guards drift.
+`.clj-kondo/generated/config.edn` (every structure, fukan-local) and the SHIPPED export
+`resources/clj-kondo.exports/fukan/fukan/config.edn` (the three defining macros plus the
+structures under `src`/`common`, with the hook source beside it). Both are merged into
+`.clj-kondo/config.edn` via `:config-paths`, so fukan lints itself with what a consumer gets;
+a consumer picks the export up with `clj-kondo --copy-configs --dependencies`. After adding or
+removing a structure, run `clojure -M:kondo` to regenerate; the `*-file-is-current` tests in
+`tasks.kondo-test` guard drift in both.
 Editor `not-a-function` / `unused-public-var` flashes on defstructure bodies are false
 positives without the hook cache; the canonical full-classpath
 `clojure -M:lint --lint src common canvas test` is authoritative (the `:lint` alias carries the
