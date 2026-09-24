@@ -158,15 +158,8 @@
  :lint-as
  {clojure.test.check.clojure-test/defspec clojure.core/def}
 
- ;; Additional config merged in: the GENERATED per-structure defstructure hooks.
- :config-paths ["generated"]
-
- ;; defstructure HOOKS are GENERATED. The per-structure instance-constructor entries
- ;; live in `.clj-kondo/generated/config.edn` (merged via :config-paths above) —
- ;; regenerate with `clojure -M:kondo`. Only the fixed defstructure entry (which
- ;; teaches clj-kondo the defining macro) is hand-written here.
- :hooks
- {:analyze-call
-  {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
-   fukan.canvas.core.structure/defrelation  hooks.fukan.structure/defrelation
-   fukan.canvas.core.structure/correspond   hooks.fukan.structure/correspond}}}
+ ;; Additional config merged in: the GENERATED per-structure defstructure hooks, and the
+ ;; export fukan ships to consumers (the defining-macro hooks, with the hook source beside
+ ;; them) — so fukan lints itself with exactly what a consumer gets. Regenerate both with
+ ;; `clojure -M:kondo`.
+ :config-paths ["generated" "../resources/clj-kondo.exports/fukan/fukan"]}
