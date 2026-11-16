@@ -15,8 +15,8 @@ primitive (the core ships none), and design presses down on it as laws the graph
 enforces — against the model and against the LLM-written implementation alike.
 
 The eventual vision is to render that graph as an interactive explorer in the
-browser — but that is **deferred indefinitely** (see below). Today fukan is a
-REPL-and-canvas tool exercised by modelling.
+browser. Today the explorer draws a project's **declared design** only (see below);
+fukan is otherwise a REPL-and-canvas tool exercised by modelling.
 
 ## The theoretical frame — measure work against it
 
@@ -135,16 +135,33 @@ dialect/extraction plugins), and `reflect/` (reflection) — see "The fukan.comm
 It loads via the `fukan.common` index ns (a *require*), not by discovery. `src/fukan/` is kernel
 mechanics + the build pipeline + the three plug-points (extraction, typing, render) only.
 
-**Parked under `.paused/`** (off-classpath): only the **browser explorer / viewer**
-(`web/`, top-level `projection/`, `infra/server`). The other once-parked subsystems
-(agent surface, old Clojure analyzer, lens substrate, inspect/instruct, code
-synthesis) were **removed** once the rebuild reborn their capabilities on the
-substrate — they live in git history. The pre-canvas Allium/Boundary specs remain
-in `.legacy-allium/` as the baseline to compare against once the transition closes.
+**The browser explorer** is `(explore)` in the cockpit. It draws the DECLARED DESIGN only —
+no extracted node, no drift. Three pieces, each ignorant of the next one up:
+- `canvas/projection/view.clj` — `view-graph`: (db, a view spec, the opened paths) → the visible
+  nodes and edges as data. A view spec NAMES relations (which nest, which are drawn as edges)
+  plus an optional selection; the namespace names no sort and no relation, so any vocabulary
+  draws. An occurrence is a PATH of entity ids (a node with two containers appears twice; eids
+  never reach the wire, they change per build); an edge whose end is hidden is CARRIED by the
+  closed box around it. A declared node the nesting relations neither contain nor give members
+  is UNPLACED: left out of the root level and counted by sort in the answer (`:unplaced true`
+  in the spec draws them). ⚠ Placement is judged over the whole declared design, never over the
+  selection — judging it over the selection makes every module "unplaced" the moment a
+  selection drops its operations. A spec may be ROOTED (`:root`, an entity id): that node's
+  direct members become the root level, and nothing outside it — node or edge — is drawn.
+- `web/explorer.clj` — the HTTP side and the one place a request is parsed. It is started with
+  a FUNCTION yielding the current model and holds nothing between requests; what a viewer opened
+  lives in the page address. ⚠ Never hand it (or cache in it) a db: a reload closes the handle.
+- `resources/public/explorer.{html,js}` — the page; layout is elkjs, loaded from a CDN.
+  It requests only RELATIVE urls, so a host may serve it under a path prefix (forwarding `api/*`
+  and `explorer.js` beneath it); `embed=1` drops its own title for use in an iframe.
+Stored, named views (a `View` structure a canvas authors) do not exist: a view is chosen in the
+page. A grouping whose members are claimed by namespace PREFIX (Band, a Region's prefixes)
+draws as an empty box — what it claims are extracted namespaces.
 
-**The browser explorer / viewer is DEFERRED INDEFINITELY.** It is fukan's eventual
-vision, but it is *not on the near roadmap and should not be proposed as a next
-step* — the core is being exercised extensively first. Do not re-suggest reviving it.
+The pre-canvas Allium/Boundary specs remain in `.legacy-allium/` as the baseline to compare
+against once the transition closes. The once-parked subsystems (agent surface, old Clojure
+analyzer, lens substrate, inspect/instruct, code synthesis, the previous viewer) live in git
+history only.
 
 **Direction — exercise the core by modelling fukan ON itself, organized by element.** The
 work now is authoring fukan's own structure directly on `defstructure` in `common/fukan/common/vocab/`,
@@ -564,8 +581,7 @@ positives without the hook cache; the canonical full-classpath
 
 ## REPL workflow
 
-The serving daemon is paused, so the loop is **in-process** (`clj -M:dev`), over the
-structure substrate which is the model:
+The loop is **in-process** (`clj -M:dev`), over the structure substrate which is the model:
 
 - `(go)` — load the model (`build-model`, defaults to a `"src"` code-root so the
   Clojure extractor merges code onto the design graph).

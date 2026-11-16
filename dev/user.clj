@@ -5,12 +5,12 @@
    project consumes is the surface fukan itself drives on every REPL start.
 
    The kernel feedback loop: build the model with `(go)`, query it with `cq/q`, run laws
-   with `(check)`. `(refresh)` reloads changed code + specs and rebuilds. (The HTTP server
-   + web explorer are PAUSED — parked under .paused/.)"
+   with `(check)`. `(refresh)` reloads changed code + specs and rebuilds. `(explore)` serves
+   the held model's declared design in the browser."
   (:require [fukan.repl :as repl
              :refer [reset refresh status architecture grammar correspondence show focus
                      check drift undeclared-code-dependencies encapsulation leaves frontier
-                     deps purity type-drift]]))
+                     deps purity type-drift explore]]))
 
 ;; fukan's own defaults: it names itself, extracts its own `src`, and — unlike a consumer —
 ;; it edits its own source as well as its specs, so the reload set is wider than the spec dirs.

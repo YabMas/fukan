@@ -125,11 +125,10 @@ not a notation you must adopt.
 
 ## What is deferred
 
-**The interactive browser explorer.** Rendering the graph as a navigable,
-in-browser structural explorer is fukan's eventual vision and the origin of its
-name. It is **deferred indefinitely**: the core is being exercised extensively
-first, and the explorer is not on the near roadmap. Its code is parked under
-`.paused/`. Do not propose reviving it as a next step.
+**The explorer beyond the declared design.** Rendering the graph as a navigable,
+in-browser structural explorer is the origin of fukan's name. It draws a project's
+declared design today. Drawing the extracted code beside it, and where the two
+diverge, is deferred until the design-only view has been lived with.
 
 **Modelling above code, and descent from it.** Modelling a domain or concepts at an
 altitude *above* code — and deriving a clean code design *down from* that abstract

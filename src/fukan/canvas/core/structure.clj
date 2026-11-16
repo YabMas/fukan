@@ -1339,9 +1339,12 @@
                  (when (> (count (filter #(and (seq? %) (= 'eq (first %))) body)) 1)
                    (throw (ex-info (str "defstructure " sname ": multiple (eq …) forms")
                                    {:structure sname}))))
+        ;; recorded so a print-dual can render the node back as the bare literal it was authored as
+        atom?  (and value? (not explicit-reader) (= 1 (count slots)) (scalar-slot? (first slots)))
         sdef   (cond-> {:tag tag :doc docstring :slots slots :laws laws :value? value?
                         :eq eq}
-                 sub (assoc :sub sub :authored-slots own))]
+                 atom? (assoc :literal-atom? true)
+                 sub   (assoc :sub sub :authored-slots own))]
     `(do
        (register-structure! (cond-> '~sdef
                               ~reader-form (assoc :reader ~reader-form)

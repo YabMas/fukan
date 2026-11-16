@@ -2,13 +2,13 @@
  ;; by the global assembler's reflective var scan, and their cross-model requires
  ;; + referred vars are used only inside defstructure clause bodies (which the
  ;; instance hook drops) — so unused-public-var / unused-namespace /
- ;; unused-referred-var are all false positives. Every `canvas.architecture.*`
- ;; module/subsystem self-spec is uniform in this, so it's matched by PATTERN
+ ;; unused-referred-var are all false positives. Every `canvas.*` self-spec —
+ ;; module, subsystem, vocabulary or claim — is uniform in this, so it's matched by PATTERN
  ;; (`:ns-groups` below) rather than enumerated — a new self-spec needs no config
  ;; edit. The rest, whose exemptions vary, stay enumerated.
  ;; (clj-kondo CLI is ground truth — mirror unused-public-var in .lsp/config.edn.)
  :ns-groups
- [{:name fukan/architecture-self-spec :pattern "canvas\\.architecture\\..*"}]
+ [{:name fukan/architecture-self-spec :pattern "canvas\\..*"}]
 
  :config-in-ns
  {fukan/architecture-self-spec

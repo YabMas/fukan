@@ -24,6 +24,7 @@
             [canvas.architecture.projection.grammar :as gram]
             [canvas.architecture.projection.instance :as inst]
             [canvas.architecture.projection.architecture :as arch]
+            [canvas.architecture.web.explorer :as explorer]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.structure :as structure]
             [canvas.architecture.ingestion.extraction :as extraction]))
@@ -58,6 +59,13 @@
     {:signature [:=> [:cat] extraction/Unit]
      :performs  [:io :throws :state]
      :delegates [infra/get-model arch/architecture-overview]})
+  (Operation explore
+    "Serve the held Model's declared design in the browser and print the address. The explorer is
+     handed `get-model` itself, not the model, so it reads whatever is held when a request
+     arrives; calling this again while one is running stops the earlier server first."
+    {:signature [:=> [:cat] extraction/Unit]
+     :performs  [:io :throws :state]
+     :delegates [infra/get-model explorer/start explorer/stop]})
   (Operation grammar
     "Print the GRAMMAR PRIMER — every vocabulary in the held Model rendered back as its map-form
      defstructures (or, given a vocabulary name, that one vocabulary alone)."

@@ -3,7 +3,8 @@
 ;; the defstructure forms in: src common canvas test.
 {:hooks
  {:analyze-call
-  {fukan.canvas.core.assemble-test/Box hooks.fukan.structure/instance
+  {canvas.vocab.claim/Claim hooks.fukan.structure/instance
+   fukan.canvas.core.assemble-test/Box hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Edge2 hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Holder hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Node2 hooks.fukan.structure/instance
@@ -121,9 +122,12 @@
    fukan.canvas.projection.grammar-test/PNode hooks.fukan.structure/instance
    fukan.canvas.projection.grammar-test/PSpecies hooks.fukan.structure/instance
    fukan.canvas.projection.grammar-test/PVal hooks.fukan.structure/instance
+   fukan.canvas.projection.instance-test/IMark hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/INode hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/ITarget hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/IVal hooks.fukan.structure/instance
+   fukan.canvas.projection.view-test/VCrate hooks.fukan.structure/instance
+   fukan.canvas.projection.view-test/VPart hooks.fukan.structure/instance
    fukan.cli-test/Card hooks.fukan.structure/instance
    fukan.cli-test/Pointer hooks.fukan.structure/instance
    fukan.common.extraction.clojure.method/Method hooks.fukan.structure/instance
@@ -151,4 +155,5 @@
    fukan.cozo.measure-test/MtCrate hooks.fukan.structure/instance
    fukan.cozo.measure-test/MtThing hooks.fukan.structure/instance
    fukan.cozo.vocab-index-test/VIThing hooks.fukan.structure/instance
-   fukan.model.pipeline-test/ECard hooks.fukan.structure/instance}}}
+   fukan.model.pipeline-test/ECard hooks.fukan.structure/instance
+   fukan.web.explorer-test/XShelf hooks.fukan.structure/instance}}}

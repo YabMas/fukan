@@ -32,7 +32,7 @@
    ;; Every `canvas.architecture.*` module/subsystem self-spec is uniform, so
    ;; it's matched by the regex string (mirrors clj-kondo's `:ns-groups`); the
    ;; rest, whose exemptions vary, stay enumerated.
-   :exclude #{"canvas\\.architecture\\..*"
+   :exclude #{"canvas\\..*"
               fukan.canvas.core.reflect
               fukan.canvas.core.reflect-test
 

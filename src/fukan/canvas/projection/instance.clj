@@ -62,16 +62,30 @@
     (when (and (string? id) (re-matches #"[^:#\s]+/[^:#/\s]+" id))
       (subs id (inc (str/last-index-of id "/"))))))
 
+(defn- atom-literal
+  "The bare literal a LITERAL ATOM was authored as — a `^:value` structure whose one scalar
+   slot the kernel fills from a bare scalar (`:io` for an Effect) — or nil when `e` is not one.
+
+   The store holds a keyword as a string, so a slot declared `:keyword` is read back as one;
+   any other scalar is returned as stored."
+  [e]
+  (let [sdef (s/structure-by-tag (struct-tag e))]
+    (when (:literal-atom? sdef)
+      (let [{:keys [rel target]} (first (:slots sdef))
+            v (get e (keyword "val" (name rel)))]
+        (if (and (= :keyword target) (string? v)) (keyword v) v)))))
+
 (defn- target-expr
   "A relation target → its authoring value expression: a reflected type value → its
    code-form via the dialect render through the plug-point (the render IS the reader's
-   dual); any other anonymous value → its inline expression form (recursive); a named
-   entity → the VAR symbol the author referenced (falling back to the entity name for
-   non-var nodes)."
+   dual); a literal atom → the bare literal it was authored as; any other anonymous value →
+   its inline expression form (recursive); a named entity → the VAR symbol the author
+   referenced (falling back to the entity name for non-var nodes)."
   [db to]
   (let [e (cq/entity db to)]
     (cond
       (= (typing/dialect-type-tag) (struct-tag e)) (typing/render-type db to)
+      (some? (atom-literal e))                     (atom-literal e)
       (nil? (:entity/name e))                      (instance-form db to)
       :else (symbol (or (var-simple-name e) (:entity/name e))))))
 

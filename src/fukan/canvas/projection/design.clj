@@ -22,6 +22,7 @@
    part of a project's declared design, however loudly it was loaded."
   (:require [clojure.string :as str]
             [fukan.canvas.core.lens :as lens]
+            [fukan.canvas.core.substrate :as substrate]
             [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.prose :as prose]
@@ -34,12 +35,17 @@
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb] :any]}
   declared-nodes
-  "The eids of the project's own declared instances — named, and not the meta-grammar's —
-   paired with their structure tag."
+  "The eids of the project's own declared instances — named, authored, and not the
+   meta-grammar's — paired with their structure tag.
+
+   Authored is part of the definition, not a caller's filter: on a model built with extraction
+   every function and namespace is a named node too, and none of them is something the project
+   declared."
   [db]
-  (->> (cq/q '[:find ?e ?t :where [?e :entity/name _] [?e :structure/of ?t]] db)
-       (remove (fn [[_ t]] (str/starts-with? (str t) meta-grammar-ns)))
-       vec))
+  (let [extracted (set (cq/q [:find '[?e ...] :where ['?e substrate/stratum-attr true]] db))]
+    (->> (cq/q '[:find ?e ?t :where [?e :entity/name _] [?e :structure/of ?t]] db)
+         (remove (fn [[e t]] (or (extracted e) (str/starts-with? (str t) meta-grammar-ns))))
+         vec)))
 
 (defn ^{:malli/schema [:=> [:cat [:sequential :any]] [:vector :string]]}
   vocabularies-of
