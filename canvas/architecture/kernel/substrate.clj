@@ -25,8 +25,8 @@
   "a reference to an already-emitted node by its natural-key entity-id — the assembler resolves it to
    that id and emits no node (the node arrives via its own root); the generated analog of a var reference.")
 (Kind StructureDb
-  "The unified structure db — the data realization of the model: a Cozo
-   db of structure instances + their reified relations. Owned here; every subsystem adopts this one Kind.")
+  "The unified structure db — the data realization of the model: structure instances + their
+   reified relations, behind an opaque handle whose engine the kernel does not name. Owned here; every subsystem adopts this one Kind.")
 (Kind Eid
   "An entity id — the identity a query yields for a node. Owned here (a substrate primitive);
    every module that navigates the db adopts this one Kind."

@@ -7,7 +7,7 @@
    defrelation / transitive closures / the essential correspond's `corresponds`/`realized-*`
    pairing rules — lives in the kernel's declaration handlers (`canvas.architecture.kernel.structure`),
    NOT here. This module holds only the fixed substrate a pure data def; it exposes no operations and
-   references nothing else, so the chain stays acyclic (lens-engine → kernel → query-engine)."
+   references nothing else."
   (:require [fukan.common.vocab.code.module :refer [Module]]))
 
 (Module core-rules

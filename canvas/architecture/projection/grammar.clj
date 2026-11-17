@@ -17,7 +17,7 @@
 (Module projection-grammar
   "Render the reified grammar back out: forms, the primer, the correspondence card (registry-direct
    authored form + db-direct live coverage readings), and the grammar-drift reading.
-   The form/primer/card readers use the kernel Cozo query layer (`query/q`)."
+   The form/primer/card readers use the engine's query interface (`query/q`)."
   (Kind Primer :string)    ; the reference-card string
   (Kind VocabName :string) ; a grammar namespace name
   (Operation correspondence-card

@@ -37,13 +37,13 @@
 (declare ingestion)
 
 (Subsystem kernel
-  "The node substrate + the defstructure grammar + its derived rules + lens engine + assembler + the
-   type-dialect plug-point + the Cozo QUERY LAYER (the datalog→CozoScript compiler `cozo-query` and its
-   engine seam `cozo-db`) — foundational; depends on nothing. The query layer sits here because the
-   kernel itself queries (the lens engine, the law engine), so it is infrastructure, not a peripheral
-   subsystem: the query primitive lives in the kernel here, while the wider `cozo` cluster above holds
-   the model assembly (mirror + native build) and the registered check engine."
-  {:child [core-substrate core-structure core-rules core-lens core-reflect assemble-faculty typing cozo-db cozo-query cozo-rules]
+  "The PRESENTATION and the model it is checked against: the node substrate, the defstructure grammar
+   and the rules and laws it derives, the assembler, the type-dialect plug-point and grammar reflection.
+   The kernel DEFINES — it states what a declaration lowers to and what a model is — and evaluates
+   nothing: no module here queries, checks or knows which engine does. Depends on nothing, and that
+   empty `:may-depend` is what keeps the engine out: a kernel module reaching for the query layer is a
+   cross-subsystem dependency the conformance law reports."
+  {:child [core-substrate core-structure core-rules core-reflect assemble-faculty typing]
    :may-depend []})
 
 (Subsystem ingestion
@@ -51,24 +51,27 @@
   {:child [canvas-source extraction] :may-depend []})
 
 (Subsystem cozo
-  "The Cozo cluster — the EAV mirror (`cozo-mirror`, the datom→stored-relation insert), the native build
-   (`cozo-build`), and the registered check ENGINE (`cozo-law`, wired into `structure/check` via the kernel
-   plug-point). The query PRIMITIVE itself (`cozo-query`/`cozo-db`) has folded UP into the kernel query
-   layer; what remains here is the model assembly + the law engine. Depends on the kernel."
-  {:child [cozo-mirror cozo-build cozo-law] :may-depend [kernel]})
+  "The ENGINE — every module that knows the model lives in Cozo: the cozo-clj seam (`cozo-db`), the
+   typed stored relations' write path (`cozo-mirror`) and decode (`cozo-rules`), the native build
+   (`cozo-build`), the datalog→CozoScript compiler behind `q`/`entity` (`cozo-query`), and law
+   evaluation (`cozo-law`, the home of `check`). It interprets the presentation the kernel defines and
+   depends on the kernel one way. Everything above reads the model by handing `q` datalog as data, so
+   which engine answers is decided here and nowhere else."
+  {:child [cozo-db cozo-mirror cozo-rules cozo-build cozo-query cozo-law] :may-depend [kernel]})
 
 (Subsystem projection
-  "The outbound render surface — the inspection print-duals that re-present the model
-   as authored forms (instance/grammar), the system map (architecture), and the visible graph a
-   view spec asks for (view). The act grammar (Lens/Projection/Check) and its engine live in the
-   kernel (core-lens)."
-  {:child [projection-instance projection-grammar projection-design projection-prose architecture projection-view] :may-depend [kernel]})
+  "The outbound read surface — selections and renderings of a model: the act grammar
+   (Lens/Projection/Check) and its selection engine (core-lens), the inspection print-duals that
+   re-present the model as authored forms (instance/grammar), the system map (architecture), and the
+   visible graph a view spec asks for (view). Reads the model through the engine's `q`."
+  {:child [core-lens projection-instance projection-grammar projection-design projection-prose architecture projection-view] :may-depend [kernel cozo]})
 
 (Subsystem web
   "The browser surface — serves readings of a model it is handed and holds none. Depends on
-   projection for what it serves and on the kernel for the model's type; it does not know a model
-   is held, built or reloaded, which is why orchestration depends on it and not the reverse."
-  {:child [explorer] :may-depend [kernel projection]})
+   projection for what it serves, on the kernel for the model's type, and on the engine for the
+   reads it makes itself; it does not know a model is held, built or reloaded, which is why
+   orchestration depends on it and not the reverse."
+  {:child [explorer] :may-depend [kernel cozo projection]})
 
 (Subsystem orchestration
   "Lifecycle + composition root + CLI entries — coordinates ingestion onto the model. Realizes no subject
