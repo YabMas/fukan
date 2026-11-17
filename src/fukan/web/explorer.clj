@@ -3,8 +3,12 @@
 
    Everything that makes a reading reachable over HTTP is in here and nowhere else: the routes,
    the JSON on the wire, the page, and the one place a request's untrusted parameters become a
-   view spec and a set of open paths (`parse-request`). The projections it calls are only ever
-   handed values of the right shape.
+   view spec, a set of open paths and a palette (`parse-request`). The projections it calls are
+   only ever handed values of the right shape.
+
+   A graph request's parameters are also what the page keeps in its address and what the CLI's
+   `view` verb is given as flags, so that parse is the one grammar a view is asked in, and
+   `address` writes it.
 
    It is started with a FUNCTION that yields the current model and calls it once per request. It
    keeps no model and nothing about any viewer between requests: what a viewer opened and
@@ -15,11 +19,12 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [fukan.canvas.projection.design :as design]
+            [fukan.canvas.projection.drawing :as drawing]
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.view :as view]
             [fukan.cozo.query :as cq]
             [org.httpkit.server :as http])
-  (:import [java.net URLDecoder]
+  (:import [java.net URLDecoder URLEncoder]
            [java.time Instant]))
 
 ;; ── the request, parsed ───────────────────────────────────────────────────────
@@ -31,9 +36,9 @@
 
 (defn- read-open
   "The `open` parameter — a JSON array of arrays of strings — as a set of paths, or nil when it
-   is anything else."
+   is anything else. Absent is no path opened; present, it must be such an array."
   [param]
-  (if (str/blank? param)
+  (if (nil? param)
     #{}
     (let [v (try (json/parse-string param) (catch Exception _ nil))]
       (when (and (sequential? v)
@@ -42,25 +47,33 @@
 
 (defn- read-select
   "The `select` parameter — EDN, a vector of clauses — or `::malformed`. Absent is nil: no
-   narrowing."
+   narrowing; present with no value is malformed, not absent — a caller asked to narrow."
   [param]
-  (if (str/blank? param)
+  (if (nil? param)
     nil
     (let [v (try (edn/read-string param) (catch Exception _ ::malformed))]
       (if (and (vector? v) (seq v)) v ::malformed))))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb [:map-of :string :string]] :GraphRequest]}
   parse-request
-  "A graph request's untrusted `params` as `[:view spec open]`, or `[:rejected reason]`.
+  "A graph request's untrusted `params` as `[:view spec open theme]`, or `[:rejected reason]`.
 
    `nest` and `link` are comma-separated relation names and must each be a relation `db`
    offers to view by — checked here so a mistyped name is answered as the caller's mistake rather
    than surfacing as an engine error about an unknown rule. `open` is a JSON array of paths.
    `select` is EDN clauses binding ?n; whether the engine can evaluate them is not decided here.
-   `unplaced` asks for the nodes the nesting says nothing about only when it is exactly `1`.
-   `root` is an entity id taken as given: one the model lacks is the projection's to answer."
+   `unplaced` asks for the nodes the nesting says nothing about, and when present must be `1`.
+   `root` is an entity id taken as given: one the model lacks is the projection's to answer.
+   `theme` is the palette a drawing of the view is painted in, `light` when the request names
+   none; a graph answer does not depend on it, and it is still refused when it is no palette.
+   A parameter PRESENT with no value is refused rather than read as absent: whoever sent it
+   asked for something, and answering as if they had not would hand back a view they did not
+   ask for. (`link`, whose empty value is the request for no link edges, is the exception.)"
   [db params]
   (let [known  (into #{} (map :name) (:relations (view/views db)))
+        theme  (get params "theme" "light")
+        root   (get params "root")
+        unplaced (get params "unplaced")
         nest   (names (get params "nest"))
         link   (names (get params "link"))
         open   (read-open (get params "open"))
@@ -72,13 +85,34 @@
                                               (str/join ", " (distinct stray)))]
       (nil? open)             [:rejected "open: expected a JSON array of paths, each an array of ids"]
       (= ::malformed select)  [:rejected "select: expected an EDN vector of clauses binding ?n"]
+      (and (some? unplaced) (not= "1" unplaced))
+      [:rejected (str "unplaced: expected 1, not " (pr-str unplaced))]
+      (and (some? root) (str/blank? root)) [:rejected "root: name the node by its entity id"]
+      (not (#{"light" "dark"} theme))
+      [:rejected (str "theme: expected light or dark, not " (pr-str theme))]
       :else                   [:view
                                (cond-> {:nest nest :link link}
                                  select (assoc :select select)
-                                 (= "1" (get params "unplaced")) (assoc :unplaced true)
-                                 (not (str/blank? (get params "root")))
-                                 (assoc :root (get params "root")))
-                               open])))
+                                 (= "1" unplaced) (assoc :unplaced true)
+                                 root (assoc :root root))
+                               open
+                               theme])))
+
+(defn- viewed
+  "The one path from a request to its view: `{:at :answer}` for `params` against whatever
+   `model` yields now, where a request that parses and that the engine can answer is `(shown
+   graph theme)` and every other outcome is the alternative that says why not."
+  [model params shown]
+  (let [db (model)]
+    {:at     (str (Instant/now))
+     :answer (if-not db
+               [:no-model]
+               (let [[tag spec open theme :as parsed] (parse-request db params)]
+                 (if (= :rejected tag)
+                   parsed
+                   (try (shown (view/view-graph db spec open) theme)
+                        (catch Exception e
+                          [:unanswerable (or (ex-message e) (str (class e)))])))))}))
 
 (defn ^{:malli/schema [:=> [:cat [:=> [:cat] [:maybe :StructureDb]] [:map-of :string :string]] :GraphAnswer]}
   answer
@@ -87,16 +121,29 @@
    (the request was malformed), `[:unanswerable reason]` (the engine refused the selection or a
    named relation is not binary) or `[:no-model]`."
   [model params]
-  (let [db (model)]
-    {:at     (str (Instant/now))
-     :answer (if-not db
-               [:no-model]
-               (let [[tag spec open :as parsed] (parse-request db params)]
-                 (if (= :rejected tag)
-                   parsed
-                   (try [:graph (view/view-graph db spec open)]
-                        (catch Exception e
-                          [:unanswerable (or (ex-message e) (str (class e)))])))))}))
+  (viewed model params (fn [graph _] [:graph graph])))
+
+(defn ^{:malli/schema [:=> [:cat [:=> [:cat] [:maybe :StructureDb]] [:map-of :string :string]] :DrawingAnswer]}
+  drawing
+  "Answer one drawing request against whatever `model` yields now. The request is a graph
+   request and is parsed and refused as one; where `answer` would give the graph, this gives
+   `[:drawing {:svg :nodes :unplaced}]` — that graph drawn in the request's palette, how many
+   occurrences it shows, and the graph's own count of unplaced nodes."
+  [model params]
+  (viewed model params
+          (fn [graph theme]
+            [:drawing {:svg      (drawing/svg (drawing/draw graph theme))
+                       :nodes    (count (:nodes graph))
+                       :unplaced (:unplaced graph)}])))
+
+(defn ^{:malli/schema [:=> [:cat [:map-of :string :string]] :string]}
+  address
+  "A graph request's `params` as the query string that carries them: what this namespace's
+   transport reads back as the same map, and what the page keeps in its address. Keys are
+   written in sorted order, so one request has one address."
+  [params]
+  (let [enc #(URLEncoder/encode (str %) "UTF-8")]
+    (str/join "&" (for [[k v] (sort-by key params)] (str (enc k) "=" (enc v))))))
 
 (defn ^{:malli/schema [:=> [:cat [:=> [:cat] [:maybe :StructureDb]]] :ChoicesAnswer]}
   choices
@@ -157,13 +204,19 @@
   (fn [{:keys [uri request-method] :as req}]
     (if (not= :get request-method)
       {:status 405 :headers {"Content-Type" "text/plain"} :body "GET only"}
-      (case uri
-        "/"            (asset "public/explorer.html" "text/html; charset=utf-8")
-        "/explorer.js" (asset "public/explorer.js" "text/javascript; charset=utf-8")
-        "/api/views"   (json-response 200 (choices model))
-        "/api/graph"   (json-response 200 (answer model (query-params req)))
-        "/api/node"    (json-response 200 (declaration model (query-params req)))
-        {:status 404 :headers {"Content-Type" "text/plain"} :body "not found"}))))
+      ;; a query string that is not percent-encoding has no parameters to answer: it is refused
+      ;; here, as the transport's own, and reaches none of the readings
+      (let [params (try (query-params req) (catch IllegalArgumentException _ ::undecodable))]
+        (if (= ::undecodable params)
+          {:status 400 :headers {"Content-Type" "text/plain"} :body "the query string is not percent-encoded text"}
+          (case uri
+            "/"             (asset "public/explorer.html" "text/html; charset=utf-8")
+            "/explorer.js"  (asset "public/explorer.js" "text/javascript; charset=utf-8")
+            "/api/views"    (json-response 200 (choices model))
+            "/api/graph"    (json-response 200 (answer model params))
+            "/api/drawing"  (json-response 200 (drawing model params))
+            "/api/node"     (json-response 200 (declaration model params))
+            {:status 404 :headers {"Content-Type" "text/plain"} :body "not found"}))))))
 
 (defn ^{:malli/schema [:=> [:cat :int [:=> [:cat] [:maybe :StructureDb]]] :any]}
   start

@@ -112,6 +112,14 @@
         (is (= 2 code) (str "check --select " v))
         (is (= "`--select` is not a flag `check` takes" error))))))
 
+(deftest a-selection-that-reads-as-nothing-is-refused-not-widened
+  (testing "`--select` with no value, or one reading as nil, asked to narrow: answering the whole
+            design for it is the widening the refusals exist to prevent"
+    (doseq [args [["describe" "--select"] ["describe" "--select" "nil"] ["report" "--select"]]]
+      (let [{:keys [code error]} (#'cli/run args)]
+        (is (= 2 code) (pr-str args))
+        (is (= "`--select` needs a selection" error) (pr-str args))))))
+
 (deftest a-format-refuses-what-its-answer-cannot-consume
   (testing "the index describes the WHOLE design however narrow the question that follows, so a
             selection it silently widened would be a promise it cannot keep"
@@ -129,6 +137,109 @@
             flags check reads still decides the whole model."
     (let [db (build/vars->cozo [#'card-bad])]
       (is (= 1 (:code (run-on db ["check" "--src" "src" "--format" "text"])))))))
+
+;; ── view answers one view with no server; selection states the language ──────
+
+(deftest view-answers-by-the-explorers-own-answer-and-opens-no-port
+  (testing "the flags reach the explorer's answer as a graph request's parameters, unread, and the
+            answer is the one a running explorer gives for the address printed"
+    (let [asked  (atom nil)
+          answer explorer/answer
+          out    (java.io.File/createTempFile "fukan-view" ".png")
+          args   ["view" "--nest" "child" "--link" "may-depend" "--select" "[(or-join [?n] (Subsystem ?n) (Module ?n))]"
+                  "--open" "[[\"canvas.architecture.subsystems/web\"]]"
+                  "--explorer" "http://example.test/x/" "--out" (str out)]
+          {:keys [code out error] :as ran}
+          (with-redefs [explorer/answer (fn [model params] (reset! asked params) (answer model params))
+                        explorer/start  (fn [& _] (throw (ex-info "view started a server" {})))]
+            (#'cli/run args))
+          {:keys [address graph image]} (edn/read-string out)]
+      (is (= 0 code) error)
+      (is (nil? (:serving ran)))
+      (is (= {"nest" "child" "link" "may-depend" "select" "[(or-join [?n] (Subsystem ?n) (Module ?n))]"
+              "open" "[[\"canvas.architecture.subsystems/web\"]]"}
+             @asked)
+          "every flag as it was typed, and nothing the caller did not pass")
+      (is (some #(= ["canvas.architecture.subsystems/web" "canvas.architecture.web.explorer/explorer"] (:path %))
+                (:nodes graph))
+          "the opened path is open")
+      (is (= (str "http://example.test/x/?" (explorer/address @asked)) address))
+      (testing "the image is the drawing, at the size reported"
+        (let [png (javax.imageio.ImageIO/read (java.io.File. ^String (:png image)))]
+          (is (= [(:width image) (:height image)] [(.getWidth png) (.getHeight png)])))
+        (is (re-find #"^<svg " (slurp (:svg image))))
+        (is (re-find #"\.svg$" (:svg image))))
+      (.delete (java.io.File. ^String (:png image)))
+      (.delete (java.io.File. ^String (:svg image))))))
+
+(deftest view-address-merges-the-view-into-the-explorers-own-query
+  (testing "a base already carrying a query keeps it, joined by `&`, and the transport reads the
+            view back as the parameters answered"
+    (let [{:keys [out]} (#'cli/run ["view" "--nest" "child" "--explorer" "http://localhost:7410/?theme=dark#top"])
+          address (:address (edn/read-string out))
+          [_ query] (re-matches #"[^?]*\?([^#]*)#top" address)]
+      (is (some? query) address)
+      (is (= {"theme" "dark" "nest" "child"}
+             (#'explorer/query-params {:query-string query})))))
+  (testing "a view parameter the base already names is replaced by the one answered, not repeated"
+    (let [{:keys [out]} (#'cli/run ["view" "--nest" "child" "--explorer" "http://localhost:7410/?nest=link&root=x"])]
+      (is (= "http://localhost:7410/?nest=child" (:address (edn/read-string out)))))))
+
+(deftest view-refuses-an-out-path-its-svg-would-overwrite
+  (doseq [ext [".svg" ".SVG"]]
+    (let [f (java.io.File/createTempFile "fukan-view" ext)
+          _ (.delete f)
+          {:keys [code error]} (#'cli/run ["view" "--nest" "child" "--out" (str f)])]
+      (is (= 2 code))
+      (is (re-find #"same file" (str error)))
+      (is (not (.exists f)) "nothing is written"))))
+
+(deftest view-writes-no-image-it-was-not-asked-for
+  (let [{:keys [code out]} (#'cli/run ["view" "--nest" "child"])]
+    (is (= 0 code))
+    (is (= #{:address :graph} (set (keys (edn/read-string out)))))))
+
+(deftest a-view-the-explorer-refuses-is-undecidable-with-its-reason
+  (testing "a relation the model does not offer"
+    (let [{:keys [code error]} (#'cli/run ["view" "--nest" "chld"])]
+      (is (= 2 code))
+      (is (re-find #"rejected.*chld" error))))
+  (testing "a selection the engine refuses, in a sentence about the clause"
+    (let [{:keys [code error]} (#'cli/run ["view" "--nest" "child" "--select" "[(or (Subsystem ?n) (Module ?n))]"])]
+      (is (= 2 code))
+      (is (re-find #"unanswerable.*\(or \(Subsystem \?n\) \(Module \?n\)\).*or-join" error))
+      (is (not (re-find #"\u001b" error)))))
+  (testing "a view flag given with no value reaches the explorer's parse and is refused there,
+            never dropped into an answer the caller did not ask for"
+    (doseq [flag ["--select" "--open" "--root" "--unplaced"]]
+      (let [{:keys [code error]} (#'cli/run ["view" "--nest" "child" flag])]
+        (is (= 2 code) flag)
+        (is (re-find (re-pattern (str "rejected: " (subs flag 2))) (str error)) flag))))
+  (testing "a flag of the verb's own given with no value is refused, not defaulted"
+    (doseq [flag ["--out" "--explorer"]]
+      (let [{:keys [code error]} (#'cli/run ["view" "--nest" "child" flag])]
+        (is (= 2 code) flag)
+        (is (re-find (re-pattern (str "`" flag "` needs a value")) (str error)) flag))))
+  (testing "a flag in a value's place is a flag, not the value: the option before it was given
+            none, and the flag itself is still given"
+    (let [{:keys [code error]} (#'cli/run ["view" "--nest" "child" "--root" "--unplaced" "1"])]
+      (is (= 2 code))
+      (is (re-find #"rejected: root" (str error))))
+    (let [{:keys [code error]} (#'cli/run ["view" "--nest" "child" "--out" "--root" "x"])]
+      (is (= 2 code))
+      (is (= "`--out` needs a value" error)))
+    (let [{:keys [code error]} (#'cli/run ["describe" "--spec-dirs" "--format" "edn"])]
+      (is (= 2 code))
+      (is (= "`--spec-dirs` needs a value" error))))
+  (testing "a view reads no code"
+    (is (= "`--src` is not a flag `view` takes" (:error (#'cli/run ["view" "--nest" "child" "--src" "src"]))))))
+
+(deftest selection-prints-the-reference-for-the-declared-design
+  (let [{:keys [code out]} (#'cli/run ["selection"])]
+    (is (= 0 code))
+    (is (re-find #"## Worked selections" out))
+    (is (re-find #"(?m)^    \[\(Operation \?n\)\]  ; \d+ nodes$" out)
+        "built from this project's own sorts, with what it selected")))
 
 ;; ── explore serves, and says where on the one line it prints ──────────────────
 

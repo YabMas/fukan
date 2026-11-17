@@ -12,8 +12,10 @@
      report     how far from obeying is this part? — the counts, and never a verdict
      elements   what are the declared things?      — each one as data, with its code twin
 
-   and a fifth that answers no question but serves the place to ask them:
+   and three for LOOKING at the declaration rather than judging against it:
 
+     view       one view of it — the graph, an image, and the address that shows it in an explorer
+     selection  the selection language, for this model — every example in it was run
      explore    the declared design, as a browser explorer — until the process is killed
 
    Usage:
@@ -23,7 +25,26 @@
      clojure -M:fukan -m fukan.cli report --src src [--spec-dirs canvas]
                                           [--format count|edn|text] [--select '[(Band ?n)]']
      clojure -M:fukan -m fukan.cli elements --src src [--spec-dirs canvas] [--select '[(Module ?n)]']
+     clojure -M:fukan -m fukan.cli view --nest child [--link may-depend] [--select '[(Band ?n)]']
+                                        [--open '[[\"id\"]]'] [--unplaced 1] [--root id]
+                                        [--spec-dirs canvas] [--out view.png]
+                                        [--explorer http://localhost:7410/]
+     clojure -M:fukan -m fukan.cli selection [--spec-dirs canvas]
      clojure -M:fukan -m fukan.cli explore [--spec-dirs canvas] [--port 7410]
+
+   `view` composes a view on the fly, with no server running. `--nest`, `--link`, `--select`,
+   `--open`, `--unplaced` and `--root` are the explorer's own graph-request parameters, each as a
+   flag and in the same encoding, and they are handed to the explorer's own answer as given: a
+   view asked here and one asked of a running explorer are parsed and refused by the same code.
+   The answer on stdout is `{:address :graph :image}`. `:address` opens the same view in the
+   explorer at `--explorer`. `--out` writes the view's drawing as a PNG at that path and as SVG
+   beside it, and `:image` then says where and how many pixels: an image is not scaled to fit, so
+   a view too large to read is narrowed by asking for less — `--root`, `--select`, fewer `--open`
+   paths. A request the explorer refuses is undecidable, with its reason on stderr.
+
+   `selection` prints what `--select` may say — the clause forms, the attributes, sorts and
+   relations of THIS model, and worked selections built from them, each one run before it was
+   printed. It is generated, so it cannot describe a language the engine no longer speaks.
 
    `explore` is the cockpit's `(explore)` for a program that holds no REPL — a dashboard embedding
    the explorer beside its own pages. It builds the DECLARED design once, as `describe` does, serves
@@ -96,6 +117,8 @@
             [clojure.string :as str]
             [fukan.canvas.ingestion.canvas-source :as canvas-source]
             [fukan.canvas.projection.design :as design]
+            [fukan.canvas.projection.drawing :as drawing]
+            [fukan.canvas.projection.reference :as reference]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.structure :as s]
             [fukan.canvas.projection.instance :as inst]
@@ -108,7 +131,14 @@
 (def ^:private flag-spelling
   "Every flag, keyword to the argv token — the one place a flag's name is written down, so a
    refusal can name it back to the caller in the form they typed."
-  {:src "--src" :spec-dirs "--spec-dirs" :format "--format" :select "--select" :port "--port"})
+  {:src "--src" :spec-dirs "--spec-dirs" :format "--format" :select "--select" :port "--port"
+   :nest "--nest" :link "--link" :open "--open" :unplaced "--unplaced" :root "--root"
+   :out "--out" :explorer "--explorer"})
+
+(def ^:private view-parameters
+  "The flags of `view` that are a graph request's parameters, under the names the explorer's
+   parse reads them by."
+  {:nest "nest" :link "link" :select "select" :open "open" :unplaced "unplaced" :root "root"})
 
 (def ^:private verb-flags
   "What each verb can CONSUME. A flag outside its verb's set is refused, because a verb that
@@ -121,7 +151,10 @@
    ;; one answer, as data, so there is no format to choose
    "elements" #{:src :spec-dirs :select}
    ;; the explorer reads the declaration alone, as describe does, and the viewer chooses the rest
-   "explore"  #{:spec-dirs :port}})
+   "explore"  #{:spec-dirs :port}
+   ;; a graph request's parameters, where to write the image, and whose address to print
+   "view"      #{:spec-dirs :nest :link :select :open :unplaced :root :out :explorer}
+   "selection" #{:spec-dirs}})
 
 (def ^:private format-flags
   "Flags the answer a `--format` names cannot consume, whatever its verb takes. The index
@@ -129,6 +162,15 @@
    could not tell you what you had not already asked for — so a selection it silently widened
    would be a promise it cannot keep."
   {:index #{:select}})
+
+(def ^:private flag-tokens
+  "Every argv token that is a flag."
+  (set (vals flag-spelling)))
+
+(def ^:private passed-on-empty
+  "The flags that may be given with no value: a graph request's parameters, whose refusal is the
+   explorer's parse to make."
+  (set (map flag-spelling (keys view-parameters))))
 
 (defn- parse-args
   "The flags GIVEN, as a map — no defaults, so a verb can tell a flag it was handed from one it
@@ -138,16 +180,28 @@
   [args]
   (loop [args args, out {}]
     (if-let [[flag value & more] (seq args)]
+      ;; a token `flag-spelling` names is a FLAG wherever it stands: in a value's place it means
+      ;; the flag before it was given none, and it is read next as the flag it is. A flag with no
+      ;; value is refused, never recorded as absent — except a graph request's parameters (and so
+      ;; `--select`), recorded as given with none: `view` hands them on for the explorer's parse
+      ;; to refuse, and the other verbs' `--select` is read in `with-defaults`
+      (let [[value more] (if (contains? flag-tokens value) [nil (rest args)] [value more])]
+      (if (and (nil? value) (contains? flag-tokens flag) (not (contains? passed-on-empty flag)))
+        (throw (ex-info (str "`" flag "` needs a value") {:flag flag}))
       (case flag
         "--src"       (recur more (assoc out :src value))
         "--spec-dirs" (recur more (assoc out :spec-dirs (vec (.split ^String value ","))))
         "--format"    (recur more (assoc out :format (keyword value)))
-        "--select"    (recur more (assoc out :select (edn/read-string value)))
+        ;; kept as typed: `view` hands it to the explorer's parse, and the other verbs read it
+        ;; in `with-defaults`
+        "--select"    (recur more (assoc out :select value))
+        ("--nest" "--link" "--open" "--unplaced" "--root" "--out" "--explorer")
+        (recur more (assoc out (keyword (subs flag 2)) value))
         "--port"      (recur more (assoc out :port (or (parse-long (str value))
                                                        (throw (ex-info (str "`--port` takes a port number, not "
                                                                             (pr-str value))
                                                                        {:flag flag})))))
-        (throw (ex-info (str "unknown flag " flag) {:flag flag})))
+        (throw (ex-info (str "unknown flag " flag) {:flag flag})))))
       out)))
 
 (defn- unconsumable
@@ -178,7 +232,14 @@
    anyone asked is indistinguishable from a `--src` the caller passed, and the refusal above
    turns on exactly that difference."
   [verb opts]
-  (merge {:src "src" :spec-dirs ["canvas"] :format (default-format verb) :port 7410} opts))
+  (cond-> (merge {:src "src" :spec-dirs ["canvas"] :format (default-format verb) :port 7410
+                  :explorer "http://localhost:7410/"}
+                 opts)
+    ;; `view` passes its selection on unread — the explorer's parse is the one that reads it
+    (and (contains? opts :select) (not= "view" verb))
+    ;; one that reads as nothing — no value, or `nil` — is refused: it was asked to narrow
+    (update :select #(or (edn/read-string %)
+                         (throw (ex-info "`--select` needs a selection" {:flag "--select"}))))))
 
 (defn- offender-name
   "Name one offender cell. An eid answers with its entity's name; a `^:value` node has none, so it
@@ -430,6 +491,74 @@
     (let [db (infra-model/load-model src)]
       {:elements (element-rows db {:src src :focus (when select (lens/focus-nodes db select))})})))
 
+(def ^:private readable-side
+  "Beyond this many pixels on a side an image is reported with advice to ask for less. Measured
+   on fukan's own design: every box opened is 6611x4070, and no label in it survives being shown
+   whole."
+  2400)
+
+(defn- view-address
+  "`explorer`, a base url, carrying `params` as its query: the base's own query parameters are
+   kept, except any under a view parameter's name — the view answered is `params` alone, and a
+   key the base repeated would be read back over it — and a fragment stays after the query, where
+   a url keeps it. Pairs are joined by `&`, so the transport reads `params` back unchanged."
+  [explorer params]
+  (let [[_ base query fragment] (re-matches #"([^?#]*)(?:\?([^#]*))?(#.*)?" explorer)
+        names (set (vals view-parameters))
+        kept  (remove (fn [pair]
+                        (or (str/blank? pair)
+                            (contains? names (java.net.URLDecoder/decode
+                                              ^String (first (str/split pair #"=" 2)) "UTF-8"))))
+                      (str/split (or query "") #"&"))
+        own   (explorer/address params)]
+    (str base "?" (str/join "&" (cond-> (vec kept) (seq own) (conj own))) fragment)))
+
+(defn- view-verb
+  "Build the declared design under `spec-dirs` and answer one view of it by the explorer's own
+   answer, handed the verb's flags as a graph request's parameters: `{:address :graph :image}`.
+
+   Nothing here reads a parameter: what `nest` or `open` must look like is the explorer's parse
+   to say, so a request it refuses is thrown with its reason. `:image` is present when `out`
+   named where to write: the PNG there, the SVG beside it, and the size in pixels."
+  [{:keys [spec-dirs out explorer] :as opts}]
+  (let [db     (binding [canvas-source/*spec-dirs* spec-dirs, *out* *err*]
+                 (pipeline/build-model nil))
+        ;; every flag given is handed on, one given with no value as an empty one: the explorer's
+        ;; parse is what refuses it, and dropping it would answer a view nobody asked for
+        params (into {} (keep (fn [[flag param]] (when (contains? opts flag) [param (str (get opts flag))])))
+                     view-parameters)
+        [tag value] (:answer (explorer/answer (constantly db) params))]
+    (when-not (= :graph tag)
+      (throw (ex-info (str "the view was " (name tag) (when value (str ": " value))) {:answer tag})))
+    (cond-> {:address (view-address explorer params)
+             :graph   value}
+      out (assoc :image
+                 (let [picture (drawing/draw value "light")
+                       svg     (str (str/replace out #"\.[A-Za-z0-9]+$" "") ".svg")
+                       {:keys [width height]} picture]
+                   ;; the SVG is named from the PNG's path, so a path already naming an SVG would
+                   ;; have its PNG overwritten by it — compared without case, as a case-blind
+                   ;; file system (macOS's default) compares them
+                   (when (.equalsIgnoreCase ^String svg ^String out)
+                     (throw (ex-info (str "`--out` names where the PNG goes and the SVG is written "
+                                          "beside it as " svg " — that is the same file; name a "
+                                          "path that does not end in .svg")
+                                     {:out out})))
+                   (with-open [o (java.io.FileOutputStream. (str out))]
+                     (.write o ^bytes (drawing/png picture)))
+                   (spit svg (drawing/svg picture))
+                   (cond-> {:png out :svg svg :width width :height height}
+                     (< readable-side (max width height))
+                     (assoc :advice (str "too large to read as one image — ask for less with "
+                                         "--root, --select, or fewer --open paths"))))))))
+
+(defn- selection-verb
+  "The selection reference for the declared design under `spec-dirs`, as text."
+  [{:keys [spec-dirs]}]
+  (reference/selection-reference
+   (binding [canvas-source/*spec-dirs* spec-dirs, *out* *err*]
+     (pipeline/build-model nil))))
+
 (defn- explore-verb
   "Build the declared design under `spec-dirs` and serve it on `port`: `{:ok :serving :out}`, where
    `:serving` is the running server and `:out` the line announcing where. The model is built before
@@ -457,6 +586,12 @@
 
     (= "explore" verb)
     (explore-verb opts)
+
+    (= "view" verb)
+    {:ok true :out (with-out-str (pp/pprint (view-verb opts)))}
+
+    (= "selection" verb)
+    {:ok true :out (str (selection-verb opts) "\n")}
 
     ;; a listing is not a verdict, so it is `:ok` whatever the laws say; a model that would not
     ;; build arrives as a throw and is undecidable like any other
