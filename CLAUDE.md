@@ -301,6 +301,26 @@ SPECIALIZED vocabulary + its mechanism together, not scattered into general voca
   `clojure/{effect,module,operation}.clj` (the per-element extraction builders). Mints no structures;
   the HOOK for the extraction plug-point; the composition root registers `extract-roots`.
 
+- `common/fukan/common/extraction/lexicon.clj` (ns `fukan.common.extraction.lexicon`) — the LEXICON
+  PRODUCER (2026-11-17): a project's DOMAIN vocabulary read out of its source. Lexicon is a library
+  a project declares its domain in (entities as Malli maps with `:lexicon/*` properties; VIEWS, the
+  attributes one use requires). The producer reads those declarations AS FORMS — nothing of the
+  adopter's is loaded — into three fact sorts: `Entity` (`:attribute`, and `:part` for the entities
+  it contains), `Attribute` (`:kind` stored/ref/many/derived, `:refers-to`), `View` (`:selects`,
+  `:declared-in` an `Ns`). Facts only, no laws of its own (THE TEST: a model producer adds facts).
+  The derived relations `entity-references`/`view-reads`/`ns-reads` and the readings
+  `domain-map`/`context-map`/`attribute-readers` are its consumers. ⚠ A use is read from a declared
+  VIEW and nowhere else: matching vocabulary keywords across a codebase was measured on brian and
+  is wrong (1,234 of 1,977 mentions sat in namespaces that never use Lexicon — older code whose
+  keys coincide). Inside a view the keyword IS the attribute; elsewhere it is a guess. ⚠ It must be
+  TOLD where to look — bind `*sources*` (`{:vocabulary [ns-prefix…] :view #{maker-symbol…}}`):
+  an entity is a `[:map …]` in a `def` like every other schema, and the view maker is usually the
+  adopter's own closure over its vocabulary. Unbound, it reads nothing. The composition root merges
+  its roots with the Clojure extractor's (a view points at its namespace by name). NOT wired into
+  the cockpit or `fukan.cli` yet, and the facts are EXTRACTED-stratum, so the explorer (declared
+  design only) does not draw them — whether a vocabulary a project authored in Lexicon's notation
+  is declared design is an open call.
+
 `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — GRAMMAR REFLECTION, kernel-native
 **CORE machinery** (NOT the reusable `fukan.common` vocab): `reflect`/`with-grammar` reifies the registry
 → model db (every defstructure → a `Structure` node, slots as `:slot/<card>` edges, laws as `:val/form`

@@ -44,6 +44,10 @@
   fukan.common.vocab.code.kind
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  ;; `Ns` is named only as a slot target (`View :declared-in`), which the hook drops
+  fukan.common.extraction.lexicon
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   fukan.common.vocab.patterns.plug-point
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
