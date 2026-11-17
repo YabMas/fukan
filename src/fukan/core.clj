@@ -1,10 +1,8 @@
 (ns fukan.core
   "Application entry point.
 
-   The HTTP/web serving layer (fukan.infra.server + fukan.web.*) is PAUSED
-   during the lean-kernel rebuild — parked under .paused/. This entry now does
-   a headless model build; the explorer returns once the core stabilises.
-   The kernel feedback loop in the meantime is with-canvas + d/q at the REPL.
+   Builds the model headlessly and exits. It serves nothing: the browser explorer is a
+   cockpit command (`fukan.repl/explore`), because it reads the model a REPL holds.
 
    Usage: clj -M -m fukan.core --src /path/to/src"
   (:require [fukan.infra.model :as infra-model]))
@@ -16,7 +14,7 @@
       (let [[flag value & remaining] args]
         (case flag
           "--src"  (recur remaining (assoc result :src value))
-          "--port" (recur remaining result) ; accepted but ignored — serving is paused
+          "--port" (recur remaining result) ; accepted and ignored — this entry serves nothing
           (recur (rest args) (assoc result :src flag)))))))
 
 (defn ^{:malli/schema [:=> [:cat [:sequential :string]] :nil]}
@@ -29,4 +27,4 @@
         (println "Usage: clj -M -m fukan.core --src /path/to/src"))
       (System/exit 1))
     (infra-model/load-model src)
-    (println "Serving layer is paused (parked under .paused/); model built headlessly.")))
+    (println "Model built headlessly. To explore it in a browser, use (explore) at the REPL.")))

@@ -20,6 +20,8 @@
             [canvas.architecture.projection.architecture :refer [architecture]]
             [canvas.architecture.projection.design :refer [projection-design]]
             [canvas.architecture.projection.prose :refer [projection-prose]]
+            [canvas.architecture.projection.view :refer [projection-view]]
+            [canvas.architecture.web.explorer :refer [explorer]]
             [canvas.architecture.orchestration.pipeline :refer [model-pipeline]]
             [canvas.architecture.orchestration.infra :refer [infra-model]]
             [canvas.architecture.orchestration.repl :refer [repl]]
@@ -57,9 +59,16 @@
 
 (Subsystem projection
   "The outbound render surface — the inspection print-duals that re-present the model
-   as authored forms (instance/grammar) plus the system map (architecture). The act
-   grammar (Lens/Projection/Check) and its engine live in the kernel (core-lens)."
-  {:child [projection-instance projection-grammar projection-design projection-prose architecture] :may-depend [kernel]})
+   as authored forms (instance/grammar), the system map (architecture), and the visible graph a
+   view spec asks for (view). The act grammar (Lens/Projection/Check) and its engine live in the
+   kernel (core-lens)."
+  {:child [projection-instance projection-grammar projection-design projection-prose architecture projection-view] :may-depend [kernel]})
+
+(Subsystem web
+  "The browser surface — serves readings of a model it is handed and holds none. Depends on
+   projection for what it serves and on the kernel for the model's type; it does not know a model
+   is held, built or reloaded, which is why orchestration depends on it and not the reverse."
+  {:child [explorer] :may-depend [kernel projection]})
 
 (Subsystem orchestration
   "Lifecycle + composition root + CLI entries — coordinates ingestion onto the model. Realizes no subject
@@ -67,5 +76,6 @@
    on projection because an entry point RENDERS: `check --format text` reports through the same
    instance print-dual the REPL does, rather than growing a second way to quote an offender. The
    cockpit's read commands (`repl`) render the held model back out through those same print-duals
-   (architecture/grammar/instance)."
-  {:child [model-pipeline infra-model repl core cli] :may-depend [kernel ingestion cozo projection]})
+   (architecture/grammar/instance). On web because the cockpit is what starts the explorer and
+   hands it the held model."
+  {:child [model-pipeline infra-model repl core cli] :may-depend [kernel ingestion cozo projection web]})

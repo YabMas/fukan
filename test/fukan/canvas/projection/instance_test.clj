@@ -18,8 +18,13 @@
 (defstructure ITarget "A named reference target.")
 
 (defstructure ^:value IVal
-  "An anonymous value."
-  {:n :int})
+  "An anonymous value of two parts — authored, and so rendered, as an expression form."
+  {:n    :int
+   :unit [:? :string]})
+
+(defstructure ^:value IMark
+  "A literal atom: one scalar slot, so it is authored as the bare scalar."
+  {:name :keyword})
 
 (defstructure INode
   "Fixture: scalars, payload, one/optional/plural refs, labels, values, a Schema."
@@ -29,6 +34,7 @@
    :main   ITarget
    :links  [:* ITarget]
    :vals   [:* IVal]
+   :marks  [:* IMark]
    :shape  [:? Schema]}
   (law "no node may be titled \"bad\""
     {:offenders [?n]
@@ -49,6 +55,7 @@
    :main  t-a
    :links [[edge t-a] t-b]
    :vals  [(IVal {:n 1}) (IVal {:n 2})]
+   :marks [:red :blue]
    :shape [:vector :keyword]})
 
 (INode bare {:title "y" :main t-a})
@@ -73,6 +80,7 @@
                :main  t-a
                :links [[edge t-a] t-b]
                :vals  [(IVal {:n 1}) (IVal {:n 2})]
+               :marks [:red :blue]
                :shape [:vector :keyword]})
            f)
         "the rendered form IS the authored form (payload as parsed data, like the grammar dual)")))
@@ -97,7 +105,9 @@
   (let [d* (db)
         [_ _ _doc m] (inst/instance-form d* (by-name d* "full"))]
     (is (= '[(IVal {:n 1}) (IVal {:n 2})] (:vals m))
-        "value targets recurse into anonymous expression forms")))
+        "value targets recurse into anonymous expression forms")
+    (is (= [:red :blue] (:marks m))
+        "a literal atom renders as the bare scalar it was authored as, a keyword as a keyword")))
 
 ;; ── text renders ──────────────────────────────────────────────────────────────
 

@@ -360,7 +360,7 @@
         owner  (into {} (cq/q '[:find ?e ?m :in $ %
                                 :where (Module ?m) (design ?m) (contains ?m ?e)]
                               db rules))
-        nodes  (remove (fn [[e _]] (:val/extracted (cq/entity db e))) (design/declared-nodes db))
+        nodes  (design/declared-nodes db)
         ids    (into {} (map (fn [[e _]] [e (:entity/id (cq/entity db e))])) nodes)
         ;; a target outside `ids` is an anonymous value or an extracted fact: it names no element
         ;; ?r is in the find so two relations with one kind and target stay two rows

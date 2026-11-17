@@ -20,9 +20,16 @@
             [fukan.canvas.core.structure :as s]
             [fukan.common.vocab.code.subsystem :as code-subsystem]
             [fukan.common.extraction.clojure.module :as clj-module]
-            [fukan.infra.model :as infra-model]))
+            [fukan.infra.model :as infra-model]
+            [fukan.web.explorer :as explorer]))
 
 (defonce ^:private cockpit (atom nil))
+
+;; Apart from `cockpit` because `go` REPLACES that atom's value: a server started before a
+;; rebuild is still listening after it, and its handle has to still be here to stop it.
+(defonce ^:private explorer-server (atom nil))
+
+(def ^:private default-explorer-port 7410)
 
 (defn ^{:malli/schema [:=> [:cat] :any]} config
   "The held cockpit config — {:src :title :spec-dirs :reload-dirs} — or nil before `go`."
@@ -48,16 +55,18 @@
      :spec-dirs    classpath dirs scanned for specs. Defaults to `*spec-dirs*` — i.e. [\"canvas\"].
      :reload-dirs  dirs clj-reload watches. Defaults to :spec-dirs. A consumer edits only specs;
                    fukan also edits its own source and so widens this.
+     :explorer-port  the port `(explore)` serves on. Defaults to 7410.
 
    `go` IS the configure step — there is no separate configure! call: it holds the config
    every other command reads, so the commands themselves stay bare."
-  [{:keys [src title spec-dirs reload-dirs]}]
+  [{:keys [src title spec-dirs reload-dirs explorer-port]}]
   (let [spec-dirs   (or spec-dirs canvas-source/*spec-dirs*)
         reload-dirs (or reload-dirs spec-dirs)]
     (alter-var-root #'canvas-source/*spec-dirs* (constantly spec-dirs))
     ;; MUST precede the reset! — it compares reload-dirs against the PREVIOUSLY held config.
     (ensure-reload-init! reload-dirs)
-    (reset! cockpit {:src src :title title :spec-dirs spec-dirs :reload-dirs reload-dirs})
+    (reset! cockpit (cond-> {:src src :title title :spec-dirs spec-dirs :reload-dirs reload-dirs}
+                      explorer-port (assoc :explorer-port explorer-port)))
     (infra-model/load-model src)))
 
 (defn- reload-code!
@@ -126,6 +135,20 @@
   (if-let [m (infra-model/get-model)]
     (println (arch/architecture-overview m (:title @cockpit)))
     (println "No model loaded yet. Use (go) first.")))
+
+(defn ^{:malli/schema [:=> [:cat] :Unit]} explore
+  "Serve the held model's declared design in the browser and print the address.
+
+   The explorer is handed `get-model` itself rather than a model, so it reads whatever is held
+   when a request arrives: after `(refresh)` the page's Reload shows the rebuilt design with no
+   restart. Calling this again stops the earlier server first, so it is also how to move to a
+   port changed with `(go {:explorer-port …})`. Works before `(go)` — the page says no model is
+   loaded until there is one."
+  []
+  (when-let [running @explorer-server] (explorer/stop running))
+  (let [port (:explorer-port @cockpit default-explorer-port)]
+    (reset! explorer-server (explorer/start port infra-model/get-model))
+    (println (str "Explorer: http://localhost:" port "/"))))
 
 (defn ^{:malli/schema [:=> [:cat :string] :Unit]} grammar
   "Print the GRAMMAR PRIMER — every vocabulary in the held model rendered back as

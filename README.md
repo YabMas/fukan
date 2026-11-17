@@ -21,7 +21,8 @@ LLM-written implementation — to account.
 > **Status: lean-kernel + modelling-exploration phase.** Fukan was radically pruned and
 > rebuilt around a single primitive, `defstructure`. The interactive browser explorer
 > that gives fukan its name — the whole graph rendered as a navigable bird's-eye view —
-> is **deferred indefinitely** (parked under `.paused/`); today fukan is a
+> shows a project's **declared design** today (`(explore)` at the REPL); the extracted
+> code and its divergence from the design are not drawn yet. Fukan is otherwise a
 > REPL-and-canvas tool, exercised by modelling. See [doc/VISION.md](doc/VISION.md) for
 > the why and [CLAUDE.md](CLAUDE.md) for the architecture.
 
@@ -201,11 +202,12 @@ src/fukan/
   canvas/core/        the defstructure primitive, derived rules, typing plug-point,
                       the act grammar + lens evaluation, grammar reflection
   canvas/ingestion/   spec discovery + assembly (*spec-dirs*)
-  canvas/projection/  the print-duals (grammar / instance / architecture)
+  canvas/projection/  the print-duals (grammar / instance / architecture) and the view graph
+  web/                the browser explorer — serves readings of a model it is handed
   cozo/               the query engine: datalog→CozoScript compiler, law engine, build, mirror
   model/              build pipeline + the extraction plug-point
   infra/              model lifecycle + composition root
-.paused/              the browser viewer stack (deferred indefinitely)
+resources/public/     the explorer's page and script
 .legacy-allium/       pre-canvas Allium/Boundary specs (read-only baseline)
 doc/                  the vision, theory, design, modelling guide, substrate spec, and decision trace
 ```

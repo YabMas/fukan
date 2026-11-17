@@ -116,7 +116,7 @@ not removing the decision.
   purpose for one. Keep the core *able* to grow one later via the refinement mechanism,
   and prove that mechanism only when a concrete need forces it.
 
-- **D13 — The browser explorer is deferred indefinitely.** It is fukan's eventual
+- **D13 — The browser explorer is deferred indefinitely.** *(Superseded by D15.)* It is fukan's eventual
   vision but is not on the near roadmap; the core is exercised first. Parked under
   `.paused/`; not to be proposed as a next step.
 
@@ -146,6 +146,29 @@ not removing the decision.
   Errata: the match body's acyclicity is NOT a registration-time check — every match joins the open
   `corresponds` head and is therefore inherently recursive, so a genuine (non-stratifiable) cycle fails
   only at EVALUATION, not as a declaration-time guard.
+
+- **D15 — The explorer returns, design-first and vocabulary-blind (2026-11-16).** Supersedes D13.
+  `(explore)` serves a held model's DECLARED DESIGN as a nested, collapsible graph; extracted code
+  and drift are not drawn. Force: the declared designs being authored (nido's hundreds of modules,
+  strata and claims; brian's growing to its codebase's size) outgrew what the text readings show,
+  and containment plus a reach DAG is a picture. What is drawn is stated by a VIEW SPEC — the
+  relations that nest, the relations drawn as edges, an optional selection — resolved by NAME
+  through the vocabulary's rules, so the viewer names no sort and draws vocabularies fukan does not
+  ship. Rejected on the merits: reviving the parked viewer (a stub against a model shape that no
+  longer exists) or the earlier explorer (hard-coded module/function/schema, one containment tree,
+  one stratum); a viewer in the vocabulary tier naming Subsystem/Region/Stratum (the groupings
+  overlap, so which one nests is a choice per view); deriving what nests from the reflected grammar
+  (the kernel cannot name a containment genus, and a Stratum's modules and a Region's interior are
+  deliberately not species of it); folding the whole graph in the browser (visibility and edge
+  carrying would live in unmodelled script); a stored `View` structure in the act grammar (no
+  present need — a view chosen in the page and carried in its address states every view asked
+  for); drawing at the root level every node the chosen nesting says nothing about (on a model
+  whose groupings hold little, that is hundreds of floating boxes burying the few that have
+  structure — such a node is UNPLACED, left out, and counted by sort beside the drawing, because
+  the fault is the model's to fix and the viewer's job is to say so). Accepted knowingly: an
+  opened box shows ALL its members, however many; an open page does not follow a
+  rebuild; a prefix-claimed grouping (Band, a Region's prefixes) draws with no members, because
+  what it claims are extracted namespaces.
 
 ---
 

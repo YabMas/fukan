@@ -260,7 +260,8 @@ relation's compiler-minted closure. The grammar is dormant as a projection surfa
 
 ## REPL loop
 
-The serving daemon is paused, so the loop is in-process (`clj -M:dev`):
+The loop is in-process (`clj -M:dev`), and `(explore)` serves the held model's declared
+design in the browser:
 `(go)` builds the model (canvas specs + the Clojure extractor over `src/`),
 `(refresh)` reloads + rebuilds, `(status)` reports state, `(architecture)` projects
 the system map, `(grammar)` prints the live language primer, `(correspondence)`
