@@ -321,6 +321,30 @@ SPECIALIZED vocabulary + its mechanism together, not scattered into general voca
   or `fukan.cli` yet, and the explorer still draws authored nodes only, so it does not draw the
   domain plane.
 
+**SIGNATURES IN THE DOMAIN'S LANGUAGE (2026-11-17).** One expression language for the shapes
+that flow through a system, used at three altitudes: the domain declares it (Lexicon), a design
+`Operation`'s `:signature` is written in it, and so is the code's `:malli/schema`. A signature
+names an ATTRIBUTE where one value passes (`:order/id`) and a VIEW where a shape does
+(`Receipt`) — `[:=> [:cat :order/id] Receipt]`, spelled alike on both sides, so the ordinary
+`:correspondence/signature-disagrees` law compares them with no law of the domain's own. What
+made it work:
+- A type-reference resolves to a `NamedType` — a GENUS in the dialect (`typing/malli.clj`), no
+  slots, no instances. `Kind` is a species; so are the Lexicon producer's `View` and `Attribute`.
+  The dialect never learns which sorts those are, so the code grammar takes no dependency on
+  Lexicon: the producer depends on the dialect. `names-type` is the general resolution,
+  `names-kind` the same narrowed to Kinds. Kind and View both stand for now — a Kind for a shape
+  that is no part of the domain (a db handle), a view for one that is.
+- A QUALIFIED keyword in a schema is a reference by its WHOLE name (`order/id`). It used to keep
+  only the name part, which made every entity's `id` one type.
+- The dialect tells `signature-in` from `signature-out`; the producer's `speaks-of`,
+  `takes-attribute`, `gives-attribute` and `hands-to` read a signature in the domain's terms, for
+  an Operation and a function alike. ⚠ A shipped relation name is GLOBAL: the first spelling,
+  `:takes`/`:gives`, collided with a consumer's slot of that name and threw at registration.
+- ⚠ Not yet: resolution is by SHORT name (two views called `Summary` both answer); `speaks-of`
+  follows collections and unions but not a `[:map …]`'s fields; only `:malli/schema` metadata is
+  extracted, not an `mx/defn`'s inline `:-`; and a bare `:order/id` is a runtime Malli schema only
+  once Lexicon offers the attribute's schema (a view already is one).
+
 **BRIDGES AND PLANES (2026-11-17).** A correspondence is a statement about two PLANES of the one
 graph, and nothing in its lowering is about code: a pairing rule over two sort tags, a
 `realized-<rel>` rule conjugating a path on the far plane by the pairing, identity on shared

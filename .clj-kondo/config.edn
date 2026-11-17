@@ -48,6 +48,10 @@
   fukan.common.extraction.lexicon
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  ;; `Kind` and `Operation` are named only as members nested in a `Module`, which the hook drops
+  fukan.common.extraction.lexicon-signature-test
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   fukan.common.vocab.patterns.plug-point
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}

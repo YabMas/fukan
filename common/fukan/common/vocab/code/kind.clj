@@ -2,7 +2,7 @@
   "Code vocab — `Kind`: a named data-shape, the nominal handle for a value type a Module owns.
    (Definition only; Kinds carry no model↔code correspondence and are not extracted.)"
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [fukan.common.typing.malli :refer [Schema]]))
+            [fukan.common.typing.malli :refer [NamedType Schema]]))
 
 (defn ^:export shape->slots
   "Kind's authoring syntax (the `(syntax …)` hook, map → map): a positional malli body is
@@ -17,6 +17,7 @@
    (a Cozo db, a filesystem reality) — honestly shapeless. A member of at most one
    Module (the owner; other modules adopt it by NAME — they reference, never contain)."
   {:shape [:? Schema]}                          ; its shape, when it has one (authored positionally)
+  (sub NamedType)                               ; a signature may name it
   (syntax shape->slots)                         ; positional malli body → the :shape slot
   (law "a Kind is a member of at most one Module"
     {:key :kind/owned-twice

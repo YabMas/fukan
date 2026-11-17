@@ -33,6 +33,7 @@
             [fukan.canvas.core.substrate :as sub]
             [fukan.common.extraction.clojure.module :refer [Ns]]
             [fukan.common.extraction.core :as extraction]
+            [fukan.common.typing.malli :refer [NamedType]]
             [fukan.cozo.query :as cq]))
 
 ;; ── the FACT vocabulary ──────────────────────────────────────────────────────
@@ -46,7 +47,8 @@
    holds; or `derived` from attributes of the same entity. `:refers-to` is the entity on the
    other end of a `ref` or a `many`, and is absent for the other two."
   {:kind      [:enum "stored" "ref" "many" "derived"]
-   :refers-to [:? Entity]})           ; a same-ns forward reference
+   :refers-to [:? Entity]}            ; a same-ns forward reference
+  (sub NamedType))                    ; a signature may name it: `:order/id` where one value passes
 
 (defstructure Entity
   "One entity of a domain vocabulary — what MAY be known about a thing the domain names. It owns
@@ -69,7 +71,8 @@
    view built from something other than a literal selection selects nothing here; it is still
    emitted, since a view nobody could read is worth seeing as one."
   {:selects     [:set Attribute]
-   :declared-in Ns})
+   :declared-in Ns}
+  (sub NamedType))                    ; a signature may name it: `Summary` where a shape passes
 
 ;; ── derived readings, at domain altitude ─────────────────────────────────────
 
@@ -90,6 +93,39 @@
    map: which part of the system depends on knowing which part of the domain."
   [?ns ?e]
   [(declared-in ?v ?ns) (view-reads ?v ?e)])
+
+;; ── signatures written in the domain's language ──────────────────────────────
+;; A signature may NAME an attribute (`:order/id`, where one value passes) or a view (`Summary`,
+;; where a shape does), on the design side and in the code alike — the same expression at both
+;; altitudes, so the ordinary signature law already compares them. These read what such a
+;; signature says in the domain's terms. They hold of an authored Operation and of an extracted
+;; function without telling the two apart: both carry a `:signature`.
+
+(defrelation :speaks-of
+  "Schema ?sch is about attribute ?a: it names it, names a view selecting it, or is built —
+   a collection, an optional, a union, at any depth — from a schema that does."
+  [?sch ?a]
+  [(names-type ?sch ?a) (is ?a ::Attribute)]
+  [(names-type ?sch ?v) (selects ?v ?a)]
+  [(of+ ?sch ?c) (names-type ?c ?a) (is ?a ::Attribute)]
+  [(of+ ?sch ?c) (names-type ?c ?v) (selects ?v ?a)])
+
+(defrelation :takes-attribute
+  "?x's signature takes attribute ?a, at some parameter."
+  [?x ?a]
+  [(signature ?x ?sig) (signature-in ?sig ?t) (speaks-of ?t ?a)])
+
+(defrelation :gives-attribute
+  "?x's signature gives attribute ?a, in its result."
+  [?x ?a]
+  [(signature ?x ?sig) (signature-out ?sig ?t) (speaks-of ?t ?a)])
+
+(defrelation :hands-to
+  "?x gives the view ?v and ?y takes it: one shape, named at both ends. It says the two agree on
+   a shape, not that one calls the other."
+  [?x ?v ?y]
+  [(signature ?x ?s1) (signature-out ?s1 ?t) (names-type ?t ?v) (is ?v ::View)
+   (signature ?y ?s2) (signature-in ?s2 ?u) (names-type ?u ?v)])
 
 ;; ── configuration ────────────────────────────────────────────────────────────
 
