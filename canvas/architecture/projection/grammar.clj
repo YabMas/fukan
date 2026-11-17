@@ -29,7 +29,7 @@
      appends its count after this card."
     {:signature [:=> [:catn [:db substrate/StructureDb]] Primer]
      :performs  [:throws :state]
-     :delegates [query/q kstructure/vocab-rules kstructure/all-corresponds]})
+     :delegates [query/q kstructure/vocab-rules kstructure/all-corresponds kstructure/pairing-relation]})
   (Operation structure-form
     "A reified Structure rendered back as its canonical map-form defstructure (the print-dual).
      External correspondence renders separately through `correspondence-form`, so both forms are

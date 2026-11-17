@@ -51,6 +51,10 @@
 (Operation correspond-by-pair
   "Look up a registered correspondence config by its [design fact] sort pair."
   {:signature [:=> [:catn [:pair :any]] :any]})
+(Operation pairing-relation
+  "The pairing relation of a bridge as a rule symbol — `corresponds-<bridge>`, or the ambient
+   `corresponds` for the unnamed one. What a reading of one correspondence asks through."
+  {:signature [:=> [:catn [:bridge :any]] :any]})
 (Operation laws-of
   "Every law of a structure — slot-derived cardinality/type laws plus its free laws, the same
    set check runs. (Correspondence generates no laws — coverage/adherence are READINGS over the
@@ -73,7 +77,7 @@
 (Module core-structure
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
   {:child [vocab-rules vocabulary-generation structure-by-tag value-literal->iv scalar-slot? all-structures
-           all-corresponds correspond-by-pair
+           all-corresponds correspond-by-pair pairing-relation
            laws-of pin-clause rule-name
            Violation Form                         ; check-output SHAPE (cozo-law produces it) + the print-dual code-form (projections produce it)
            Rule]})                                ; the rules-output type

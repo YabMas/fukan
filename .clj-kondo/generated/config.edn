@@ -12,6 +12,7 @@
    fukan.canvas.core.assemble-test/Sym2 hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Tag2 hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Thing hooks.fukan.structure/instance
+   fukan.canvas.core.bridge-test/Concept hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Holder hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Note hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/PathAudit hooks.fukan.structure/instance

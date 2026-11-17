@@ -40,6 +40,14 @@
    fixtures fact)."
   :val/extracted)
 
+(def plane-attr
+  "The PLANE attribute — which plane a produced node belongs to, as a label its producer's
+   composition names (`\"code\"`, `\"domain\"`, …). Beside `stratum-attr`, not instead of it: the
+   stratum says a node was PRODUCED rather than authored, the plane says by what reading of the
+   project. The kernel names no plane; the build writes whatever label the facts arrive under
+   (`fukan.cozo.build/model->cozo`), and the substrate rule `(plane ?n ?p)` reads it."
+  :val/plane)
+
 (defn ^{:malli/schema [:=> [:cat :any] :any]}
   stamp-stratum
   "Stamp an InstanceValue tree as FACT-stratum: `stratum-attr` true on `iv` and, recursively,
