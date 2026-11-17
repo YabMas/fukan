@@ -137,6 +137,7 @@
    fukan.common.extraction.lexicon/Attribute hooks.fukan.structure/instance
    fukan.common.extraction.lexicon/Entity hooks.fukan.structure/instance
    fukan.common.extraction.lexicon/View hooks.fukan.structure/instance
+   fukan.common.typing.malli/NamedType hooks.fukan.structure/instance
    fukan.common.typing.malli/Schema hooks.fukan.structure/instance
    fukan.common.typing.malli/SchemaChoice hooks.fukan.structure/instance
    fukan.common.typing.malli/SchemaField hooks.fukan.structure/instance

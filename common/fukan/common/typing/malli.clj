@@ -120,6 +120,10 @@
      :Foo (a non-builtin bare keyword)         the referenced type name in a `:ref`
                                                leaf (no edge; resolution to the Kind
                                                is the by-name `names-kind` relation)
+     :order/id (a QUALIFIED keyword)           a `ref` too, by its WHOLE name
+                                               (`order/id`) — the namespace is part of
+                                               what the keyword names, and a domain
+                                               attribute is told from another by it
 
    A builtin bare keyword (int/string/…, see `builtin-scalar-kinds`) is a scalar; ANY
    other bare keyword, or a bare symbol, is a name-ref to a Kind — both reduce to the
@@ -128,8 +132,12 @@
    SchemaChoice reader preserves the member type, so forms round-trip exactly."
   [data]
   (cond
-    (keyword? data) (if (contains? builtin-scalar-kinds (name data))
+    (keyword? data) (cond
+                      (namespace data)  ; a qualified keyword names a type by its WHOLE name
+                      [(list 'kind "ref") (list 'ref (subs (str data) 1))]
+                      (contains? builtin-scalar-kinds (name data))
                       [(list 'kind (name data))]
+                      :else
                       [(list 'kind "ref") (list 'ref (name data))])
     (symbol?  data) [(list 'kind "ref") (list 'ref (name data))]
     (vector?  data)
@@ -190,6 +198,15 @@
     :else (throw (ex-info (str "not a valid malli schema: " (pr-str data) " — records are [:map [:k V] …], not {:k V}")
                           {:data data}))))
 
+(defstructure NamedType
+  "Anything a type-reference may NAME: a shape with a name of its own, which a signature points at
+   instead of spelling out. A genus and nothing else — it has no slots and no instances of its
+   own. A sort becomes nameable by declaring itself a species (`(sub NamedType)`): the design's
+   `Kind` is one, and so is whatever a second source of named shapes contributes (a project's
+   Lexicon views and attributes). The dialect resolves a reference against the genus and so
+   never learns which sorts those are."
+  {})
+
 (defstructure ^:value Schema
   "A malli schema, value-identified. `:kind` (a String) is the combinator:
    scalar (int/string/boolean/keyword/double — with :min/:max/:regex leaves),
@@ -206,21 +223,21 @@
    params + :out). Author as native malli; read-malli expands it. A ref stores the
    referenced type NAME as a leaf (not an edge), so design symbols and code keywords
    share one representation and a ref is reflectable via value-literal->iv; resolution
-   to the named Kind is the by-name `names-kind` relation, and the coming
-   no-dangling-ref law demands every :ref name resolve to a modelled Kind."
+   to what it names is by NAME — `names-type` for any `NamedType`, `names-kind` for a Kind in
+   particular — and the no-dangling-ref law demands every :ref name resolve to one."
   {:kind   :string
    :min    [:? :int]
    :max    [:? :int]
    :regex  [:? :string]
-   :ref    [:? :string]          ; a ref schema's referenced type NAME (resolves by-name to a Kind)
+   :ref    [:? :string]          ; a ref schema's referenced type NAME (resolves by-name to a NamedType)
    :of     [:* Schema]           ; ordered children (tuple/or/and/map-of are form-faithful)
    :field  [:set SchemaField]    ; map entries — unordered, like the map they describe
    :choice [:* SchemaChoice]     ; enum members in form order (round-trip faithful)
    :in     [:* Schema]           ; arrow params — ordered, each :rel/label-ed with its name
    :out    [:? Schema]}          ; arrow result
   (reader read-malli)
-  ;; NO DANGLING REFS: a type-reference must resolve to a modelled Kind (by name). A ref with no
-  ;; :ref name, or a name no Kind carries, is a violation — the design pressure that forces every
+  ;; NO DANGLING REFS: a type-reference must resolve to a modelled NamedType (by name). A ref with
+  ;; no :ref name, or a name no named type carries, is a violation — the design pressure that forces every
   ;; referenced type (external/library types included) to be modelled explicitly. Subsumes the old
   ;; "a ref must name a target" presence law.
   ;; TWO laws, because the two failures differ in what a reader can do about them — and what
@@ -240,12 +257,12 @@
   ;; there the law reads "every string that is a Schema…", which is nothing, and it goes quietly
   ;; vacuous rather than failing. So the sort is pinned on `?sch` in the body instead, where it
   ;; belongs. Changing which var an offender list leads with can silently switch a law off.
-  (law "every type-reference resolves to a modelled Kind"
+  (law "every type-reference resolves to a modelled named type"
     {:scope :global
      :key :typing/reference-unresolved
      :offenders [?nm]
      :where [(is ?sch ::Schema) [?sch :val/kind "ref"] [?sch :val/ref ?nm]
-             (not-join [?nm] [?k :entity/name ?nm] (Kind ?k))]}))
+             (not-join [?nm] [?k :entity/name ?nm] (is ?k ::NamedType))]}))
 
 ;; ── what it MEANS for two schemas to say the same thing ─────────────────────────────────────
 ;; The dialect owns the shape of a function type, so it owns the comparison too. Before
@@ -317,6 +334,27 @@
   [(out ?sig ?t)]
   [(of ?sig ?arrow) (in ?arrow ?t)]
   [(of ?sig ?arrow) (out ?arrow ?t)])
+
+;; Where a signature's parameter and result types sit, through each arity of a multi-arity one.
+;; Told apart, where `signature-type` deliberately is not: what a function TAKES and what it GIVES
+;; are different questions to anything reading the flow of data.
+(s/defrelation :signature-in
+  "A type a signature takes at a parameter position."
+  [?sig ?t]
+  [(in ?sig ?t)]
+  [(of ?sig ?arrow) (in ?arrow ?t)])
+
+(s/defrelation :signature-out
+  "The type a signature gives as its result."
+  [?sig ?t]
+  [(out ?sig ?t)]
+  [(of ?sig ?arrow) (out ?arrow ?t)])
+
+(s/defrelation :names-type
+  "A ref Schema ?sch whose name resolves to the named type ?t, of whatever sort — a Kind, or
+   anything else declared a `NamedType`. `names-kind` is this narrowed to Kinds."
+  [?sch ?t]
+  [[?sch :val/kind "ref"] [?sch :val/ref ?nm] [?t :entity/name ?nm] (is ?t ::NamedType)])
 
 ;; names-kind — the type-ref → named-Kind navigation as a DEFRELATION (injected into every law/query
 ;; by check/vocab-rules), so the consumers that chase a ref Schema to the type it names — e.g.

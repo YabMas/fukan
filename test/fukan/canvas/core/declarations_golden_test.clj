@@ -525,13 +525,20 @@
 ;; assumed: the same change gave a correspondence an optional BRIDGE name, and with the plane
 ;; rule set aside the snapshot hashes exactly as it did before — the ambient bridge's terms are
 ;; byte-identical, which is what "a second bridge does not disturb the first" has to mean here.
-(def ^:private golden-terms {:count 214 :hash 794170478})
+;; 2026-11-17 (signatures in the domain's language): a type-reference resolves to a `NamedType`,
+;; a genus `Kind` and the Lexicon producer's `View` and `Attribute` are species of — so a signature
+;; may name a view or an attribute where it named a Kind. Terms 214→246 (+32): the genus and its
+;; three membership bodies, the dialect's `signature-in`/`signature-out`/`names-type`, the
+;; producer's `speaks-of`/`takes-attribute`/`gives-attribute`/`hands-to`, and the closures the compiler mints for the
+;; binary ones. Laws 108→108: the count holds and the hash moves, because the one law that asked
+;; for a Kind (`:typing/reference-unresolved`) now asks for a named type.
+(def ^:private golden-terms {:count 246 :hash 290659491})
 ;; 2026-09-22 (later still): every authored law in the shipped vocabulary carries a stable `:key`
 ;; — Region, Band, Subsystem, Stratum, Kind and the malli dialect were reachable only by matching
 ;; their DESCRIPTION, which goes silently green when the sentence is reworded and silent altogether
 ;; when a law is added. Counts unchanged; the laws hash moves because `:key` is part of the
 ;; snapshot's per-law tuple, which is the point — a key is now emission the golden guards.
-(def ^:private golden-laws  {:count 108 :hash 1398633607})
+(def ^:private golden-laws  {:count 108 :hash -1115205481})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
