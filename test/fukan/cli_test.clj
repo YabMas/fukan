@@ -13,7 +13,9 @@
             ;; dispatches
             [fukan.cozo.law :as law]
             [fukan.cozo.query :as cq]
-            [fukan.infra.model :as infra-model]))
+            [fukan.infra.model :as infra-model]
+            [fukan.model.pipeline :as pipeline]
+            [fukan.web.explorer :as explorer]))
 
 (defstructure Card "Test fixture: a structure whose refined slot gives us a law that fires."
   {:card [:enum "one" "many"]})
@@ -127,6 +129,33 @@
             flags check reads still decides the whole model."
     (let [db (build/vars->cozo [#'card-bad])]
       (is (= 1 (:code (run-on db ["check" "--src" "src" "--format" "text"])))))))
+
+;; ── explore serves, and says where on the one line it prints ──────────────────
+
+(deftest explore-serves-the-declared-design-and-prints-where
+  (testing "the printed line is the caller's readiness signal and the only way to learn a port it
+            left to the OS, so it must name the port actually listened on"
+    (let [db (build/vars->cozo [#'card-good])
+          {:keys [code out serving]} (with-redefs [pipeline/build-model (fn [_] db)]
+                                       (#'cli/run ["explore" "--port" "0"]))]
+      (try
+        (is (= 0 code))
+        (is (some? serving) "run hands back the server, so -main knows not to exit under it")
+        (let [[_ port] (re-matches #"fukan explorer: http://localhost:(\d+)/\n" out)]
+          (is (= (str (explorer/port serving)) port))
+          (is (re-find #"\"choices\"" (slurp (str "http://localhost:" port "/api/views")))))
+        (finally (when serving (explorer/stop serving)))))))
+
+(deftest explore-reads-no-code
+  (testing "the explorer serves the declaration; a code root would be a flag with no reader"
+    (let [{:keys [code error]} (#'cli/run ["explore" "--src" "src"])]
+      (is (= 2 code))
+      (is (= "`--src` is not a flag `explore` takes" error)))))
+
+(deftest a-port-that-is-not-a-number-is-refused-in-a-sentence
+  (let [{:keys [code error]} (#'cli/run ["explore" "--port" "abc"])]
+    (is (= 2 code))
+    (is (= "`--port` takes a port number, not \"abc\"" error))))
 
 ;; ── the report is a function of the model, not of iteration order ────────────
 
