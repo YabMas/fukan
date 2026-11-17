@@ -1,7 +1,7 @@
 (ns fukan.common
   "The fukan common modelling grammar — one require that registers the whole vocabulary.
    Requiring this ns loads every element of the code grammar plus the malli type dialect,
-   the Clojure extraction seam, and grammar reflection, so the full grammar is registered
+   the Clojure extraction seam and the Lexicon producer beside it, so the full grammar is registered
    (e.g. for the print-dual) without depending on spec discovery. A consuming project
    `(:require [fukan.common])` for the complete grammar, or requires the specific
    `fukan.common.vocab.*` elements it authors against. (Grammar REFLECTION is NOT here — it is
@@ -18,4 +18,5 @@
             [fukan.common.vocab.patterns.plug-point]
             [fukan.common.vocab.patterns.fulfilment]
             [fukan.common.typing.malli]
-            [fukan.common.extraction.core]))
+            [fukan.common.extraction.core]
+            [fukan.common.extraction.lexicon]))

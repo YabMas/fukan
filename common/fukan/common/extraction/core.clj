@@ -76,6 +76,29 @@
   [alias]
   (create-ns (symbol (str "fukan.extraction.alias." alias))))
 
+(defn read-forms
+  "Every top-level form of `file`, read PERMISSIVELY, or nil when the file will not read.
+
+   The one read every positional or form-level reading of adopter source goes through. What makes
+   it permissive, and why each binding is there, is `form-extents`' to say, since that is the
+   reading the bindings were bought for; a second reader of forms (the Lexicon producer) takes
+   the same read rather than a near copy that drifts from it. The VALUES are only as good as a
+   reader with none of the adopter's namespaces loaded can make them: an auto-resolved keyword
+   comes out under a made-up namespace, a tagged literal as a `tagged-literal`, a reader
+   conditional preserved whole. Plain data — a qualified keyword, a vector, a map — is exact."
+  [file]
+  (try
+    (let [rdr (reader-types/indexing-push-back-reader (slurp file))]
+      (binding [reader/*alias-map*    alias-ns
+                reader/*data-readers* (fn [tag] #(tagged-literal tag %))
+                reader/*read-eval*    false]
+        (loop [acc []]
+          (let [form (reader/read {:eof ::eof :read-cond :preserve} rdr)]
+            (if (= ::eof form)
+              acc
+              (recur (conj acc form)))))))
+    (catch Throwable _ nil)))
+
 (defn- form-extents
   "The source extent of every COLLECTION form in `file`, at any nesting depth, as
    `{:line :column :end-line :end-column}` — or nil when the file will not read.
@@ -141,17 +164,7 @@
              (when-let [m (and (coll? form) (meta form))]
                (when (and (:line m) (:end-line m)) [(select-keys m [:line :column :end-line :end-column])]))
              (mapcat extents (inside form))))]
-    (try
-      (let [rdr (reader-types/indexing-push-back-reader (slurp file))]
-        (binding [reader/*alias-map*    alias-ns
-                  reader/*data-readers* (fn [tag] #(tagged-literal tag %))
-                  reader/*read-eval*    false]
-          (loop [acc []]
-            (let [form (reader/read {:eof ::eof :read-cond :preserve} rdr)]
-              (if (= ::eof form)
-                acc
-                (recur (into acc (extents form))))))))
-      (catch Throwable _ nil))))
+    (some->> (read-forms file) (into [] (mapcat extents)))))
 
 (defn- within?
   "Is position `[line col]` inside `extent`? End is EXCLUSIVE — the reader reports `:end-column`

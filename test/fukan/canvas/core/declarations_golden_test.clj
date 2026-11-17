@@ -42,7 +42,11 @@
             ;; what this namespace's explicit requires exist to prevent.
             [fukan.common.extraction.clojure.module]
             [fukan.common.extraction.clojure.operation]
-            [fukan.common.extraction.clojure.method]))
+            [fukan.common.extraction.clojure.method]
+            ;; …and the Lexicon producer, whose three sorts joined the shipped tier 2026-11-17. Its
+            ;; first golden (213/108) was taken in a full run and was the same trap again: nothing
+            ;; here required it, so the snapshot held only when another test had loaded the index.
+            [fukan.common.extraction.lexicon]))
 
 (defn self-model-structures
   "The registered structures defined in the self-model vocabulary — stable regardless of which test
@@ -510,13 +514,19 @@
 ;; outranks a prefix). The widened slot targets add no law: a union's target-type check is still
 ;; one law. Laws 97→98 (+1, AUTHORED): a placed Module must be contained by every region whose
 ;; prefix claims the namespace it pairs with — the one case specificity cannot settle.
-(def ^:private golden-terms {:count 186 :hash -1229796599})
+;; 2026-11-17: the LEXICON PRODUCER's fact vocabulary joins the shipped tier —
+;; `fukan.common.extraction.lexicon`'s three sorts (`Entity`/`Attribute`/`View`), their slots
+;; (`:attribute`, `:part`, `:kind`, `:refers-to`, `:selects`, `:declared-in`) and the three derived
+;; relations over them (`entity-references`, `view-reads`, `ns-reads`). Terms 186→213 (+27).
+;; Laws 98→108 (+10), every one GENERATED from a slot's quantifier, target sort or enum: the
+;; producer authors none, since a model producer adds facts and no laws of its own.
+(def ^:private golden-terms {:count 213 :hash -579161955})
 ;; 2026-09-22 (later still): every authored law in the shipped vocabulary carries a stable `:key`
 ;; — Region, Band, Subsystem, Stratum, Kind and the malli dialect were reachable only by matching
 ;; their DESCRIPTION, which goes silently green when the sentence is reworded and silent altogether
 ;; when a law is added. Counts unchanged; the laws hash moves because `:key` is part of the
 ;; snapshot's per-law tuple, which is the point — a key is now emission the golden guards.
-(def ^:private golden-laws  {:count 98 :hash 1309066733})
+(def ^:private golden-laws  {:count 108 :hash 1398633607})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

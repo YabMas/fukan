@@ -5,7 +5,8 @@
    code when given a source tree). The held Cozo db is closed on each reload.
 
    This is also the DEFAULT composition root — for fukan and for any consumer alike. It
-   registers the Clojure fact extractor at the `fukan.model.extraction` plug-point; nothing
+   registers the Clojure fact extractor (with the Lexicon producer's roots merged onto its own) at
+   the `fukan.model.extraction` plug-point; nothing
    here is fukan-specific, so a Clojure project consumes it as-is. A project targeting another
    language writes its own composition root and registers its own extractor. The type dialect
    needs no wiring — `fukan.common.typing.malli` self-registers when it loads (required below to
@@ -16,11 +17,18 @@
             [fukan.model.pipeline :as pipeline]
             [fukan.cozo.db :as cozo-db]
             [fukan.cozo.query :as cq]
-            [fukan.common.extraction.core :as target]))
+            [fukan.common.extraction.core :as target]
+            [fukan.common.extraction.lexicon :as lexicon]))
 
-;; Register fukan's project FACT extractor — its own Clojure source, as the engine-agnostic
-;; `{:roots :ground}` facts the native Cozo build consumes (`:ground` is the post-build :calls grounding).
-(extraction/register-fact-extractor! (fn [root] (target/extract-roots [root])))  ; target -> fukan.common.extraction.core
+;; Register the project FACT extractor: the Clojure source as the engine-agnostic `{:roots}` facts
+;; the native Cozo build consumes, with the project's Lexicon declarations read from the same tree
+;; merged onto them. One slot, two producers: a Lexicon view points at the namespace declaring it
+;; by name, so its roots only assemble beside the Clojure extractor's. The Lexicon producer adds
+;; nothing for a project that binds no `lexicon/*sources*`.
+(extraction/register-fact-extractor!
+ (fn [root]
+   {:roots (into (:roots (target/extract-roots [root]))    ; target -> fukan.common.extraction.core
+                 (:roots (lexicon/extract-roots [root])))}))
 
 (defonce ^:private state (atom {:cozo nil :src nil}))
 
