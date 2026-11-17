@@ -2,6 +2,7 @@
   "What the browser explorer's design commits its modules to. Each Claim's name is the id the
    design record carries for it and its docstring is the record's statement."
   (:require [canvas.vocab.claim :refer [Claim]]
+            [canvas.architecture.orchestration.cli :as cli]
             [canvas.architecture.orchestration.infra :as infra]
             [canvas.architecture.orchestration.repl :as repl]
             [canvas.architecture.projection.design :as design]
@@ -69,9 +70,9 @@
 
 (Claim explorer-holds-nothing
   "The explorer obtains the model by calling the function it was started with, once per
-   request, and keeps neither a model nor any viewer's state between requests. Only the cockpit
-   knows which model that function yields."
-  {:about [explorer/explorer infra/infra-model repl/repl] :evidence "round"})
+   request, and keeps neither a model nor any viewer's state between requests. Only its caller —
+   the cockpit, or the CLI's `explore` verb — knows which model that function yields."
+  {:about [explorer/explorer infra/infra-model repl/repl cli/cli] :evidence "round"})
 
 (Claim a-declaration-is-answered-by-entity-id
   "Selecting a node shows its authored declaration: the explorer answers a declaration request,

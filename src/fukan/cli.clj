@@ -12,6 +12,10 @@
      report     how far from obeying is this part? — the counts, and never a verdict
      elements   what are the declared things?      — each one as data, with its code twin
 
+   and a fifth that answers no question but serves the place to ask them:
+
+     explore    the declared design, as a browser explorer — until the process is killed
+
    Usage:
      clojure -M:fukan -m fukan.cli describe [--spec-dirs canvas] [--format index|prose|forms]
                                             [--select '[(Band ?n)]']
@@ -19,6 +23,15 @@
      clojure -M:fukan -m fukan.cli report --src src [--spec-dirs canvas]
                                           [--format count|edn|text] [--select '[(Band ?n)]']
      clojure -M:fukan -m fukan.cli elements --src src [--spec-dirs canvas] [--select '[(Module ?n)]']
+     clojure -M:fukan -m fukan.cli explore [--spec-dirs canvas] [--port 7410]
+
+   `explore` is the cockpit's `(explore)` for a program that holds no REPL — a dashboard embedding
+   the explorer beside its own pages. It builds the DECLARED design once, as `describe` does, serves
+   it, and prints ONE line, `fukan explorer: http://localhost:<port>/`, to stdout once it is
+   listening; that line is the readiness signal, and the only stdout the verb ever writes. It then
+   blocks until killed, so a design edited after it started is served only by a new process.
+   `--port 0` takes any free port, which is how a caller running several avoids choosing one — the
+   printed line says which it got. A model that will not build exits 2, like any other verb.
 
    `elements` is the one answer shaped for a program to JOIN on rather than to read: every authored
    element with its sort, a digest of its declaration, and — for one whose module pairs with code —
@@ -89,12 +102,13 @@
             [fukan.cozo.law :as law]
             [fukan.cozo.query :as cq]
             [fukan.infra.model :as infra-model]
-            [fukan.model.pipeline :as pipeline]))
+            [fukan.model.pipeline :as pipeline]
+            [fukan.web.explorer :as explorer]))
 
 (def ^:private flag-spelling
   "Every flag, keyword to the argv token — the one place a flag's name is written down, so a
    refusal can name it back to the caller in the form they typed."
-  {:src "--src" :spec-dirs "--spec-dirs" :format "--format" :select "--select"})
+  {:src "--src" :spec-dirs "--spec-dirs" :format "--format" :select "--select" :port "--port"})
 
 (def ^:private verb-flags
   "What each verb can CONSUME. A flag outside its verb's set is refused, because a verb that
@@ -105,7 +119,9 @@
    "check"    #{:src :spec-dirs :format}
    "report"   #{:src :spec-dirs :format :select}
    ;; one answer, as data, so there is no format to choose
-   "elements" #{:src :spec-dirs :select}})
+   "elements" #{:src :spec-dirs :select}
+   ;; the explorer reads the declaration alone, as describe does, and the viewer chooses the rest
+   "explore"  #{:spec-dirs :port}})
 
 (def ^:private format-flags
   "Flags the answer a `--format` names cannot consume, whatever its verb takes. The index
@@ -127,6 +143,10 @@
         "--spec-dirs" (recur more (assoc out :spec-dirs (vec (.split ^String value ","))))
         "--format"    (recur more (assoc out :format (keyword value)))
         "--select"    (recur more (assoc out :select (edn/read-string value)))
+        "--port"      (recur more (assoc out :port (or (parse-long (str value))
+                                                       (throw (ex-info (str "`--port` takes a port number, not "
+                                                                            (pr-str value))
+                                                                       {:flag flag})))))
         (throw (ex-info (str "unknown flag " flag) {:flag flag})))
       out)))
 
@@ -158,7 +178,7 @@
    anyone asked is indistinguishable from a `--src` the caller passed, and the refusal above
    turns on exactly that difference."
   [verb opts]
-  (merge {:src "src" :spec-dirs ["canvas"] :format (default-format verb)} opts))
+  (merge {:src "src" :spec-dirs ["canvas"] :format (default-format verb) :port 7410} opts))
 
 (defn- offender-name
   "Name one offender cell. An eid answers with its entity's name; a `^:value` node has none, so it
@@ -410,6 +430,18 @@
     (let [db (infra-model/load-model src)]
       {:elements (element-rows db {:src src :focus (when select (lens/focus-nodes db select))})})))
 
+(defn- explore-verb
+  "Build the declared design under `spec-dirs` and serve it on `port`: `{:ok :serving :out}`, where
+   `:serving` is the running server and `:out` the line announcing where. The model is built before
+   the server starts, so a model that will not build throws here and never opens a port."
+  [{:keys [spec-dirs port]}]
+  (let [db     (binding [canvas-source/*spec-dirs* spec-dirs, *out* *err*]
+                 (pipeline/build-model nil))
+        server (explorer/start port (constantly db))]
+    {:ok      true
+     :serving server
+     :out     (str "fukan explorer: http://localhost:" (explorer/port server) "/\n")}))
+
 (defn- render
   "The verb's answer as the exact text to put on stdout, and whether the model holds:
    `{:ok :out}`. `:out` carries its own trailing newline.
@@ -422,6 +454,9 @@
   (cond
     (= "describe" verb)
     {:ok true :out (str (:text (describe-verb opts)) "\n")}
+
+    (= "explore" verb)
+    (explore-verb opts)
 
     ;; a listing is not a verdict, so it is `:ok` whatever the laws say; a model that would not
     ;; build arrives as a throw and is undecidable like any other
@@ -449,7 +484,8 @@
               (with-out-str (pp/pprint (dissoc result :db :raw))))})))
 
 (defn- run
-  "One invocation, decided but not yet printed: `{:code :out :error}`.
+  "One invocation, decided but not yet printed: `{:code :out :error}`, and `:serving` when the
+   verb left a server running that `-main` must not exit out from under.
 
    Everything fallible lives here — parsing, the build, the check, and the render — so that
    every way this can fail lands on the same answer, and `-main` is left with a string, a
@@ -476,12 +512,13 @@
                            :because     (mapv :law (:unsupported (ex-data t)))}))))]
     (if (:undecidable result)
       {:code 2 :error (:error result) :out (with-out-str (pp/pprint result))}
-      {:code (if (:ok result) 0 1) :out (:out result)})))
+      (cond-> {:code (if (:ok result) 0 1) :out (:out result)}
+        (:serving result) (assoc :serving (:serving result))))))
 
 (defn ^{:malli/schema [:=> [:cat [:sequential :string]] :nil]}
   -main
   [& args]
-  (let [{:keys [code out error]} (run args)]
+  (let [{:keys [code out error serving]} (run args)]
     ;; the sentence goes to stderr and the report to stdout: a consumer parsing stdout must find
     ;; data there whatever happened, and a human wants the reason without reading edn for it
     (when error (binding [*out* *err*] (println "fukan UNDECIDABLE:" error)))
@@ -490,4 +527,7 @@
     ;; `clojure.main` performs on the way out — an unflushed report is a verdict with no
     ;; evidence under it
     (flush)
-    (System/exit code)))
+    ;; a serving verb's answer is the server itself: exiting would take it down
+    (if serving
+      @(promise)
+      (System/exit code))))

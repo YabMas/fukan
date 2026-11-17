@@ -87,6 +87,10 @@
     {:signature [:=> [:catn [:port :int] [:model [:=> [:cat] [:maybe substrate/StructureDb]]]] :any]
      :performs  [:io :state :throws]
      :delegates [answer declaration choices]})
+  (Operation port
+    "The port a server `start` returned listens on — the one it was handed, or the one it got when
+     handed 0."
+    {:signature [:=> [:catn [:server :any]] :int]})
   (Operation stop
     "Stop the server a `start` returned."
     {:signature [:=> [:catn [:server :any]] :nil]

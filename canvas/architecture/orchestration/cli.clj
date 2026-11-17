@@ -6,7 +6,8 @@
    of it) and `elements` (what are the declared things, as data to join on). The split between
    `check` and `report` is the whole point of having both — `check` decides the model and may be
    scoped by nothing, `report` measures a slice and gates on nothing — so only the verb that
-   decides can fail a build.
+   decides can fail a build. A fifth, `explore`, answers no question: it serves the explorer over
+   the declaration until killed, for a program that embeds it and holds no REPL.
 
    A sibling of `core` in the orchestration subsystem, and for the same reason: it composes the
    model lifecycle behind a `-main` and realizes no subject faculty of its own. Its judgement is
@@ -21,11 +22,12 @@
             [canvas.architecture.projection.design :as design]
             [canvas.architecture.projection.instance :as instance]
             [canvas.architecture.orchestration.infra :as infra]
-            [canvas.architecture.orchestration.pipeline :as pipeline]))
+            [canvas.architecture.orchestration.pipeline :as pipeline]
+            [canvas.architecture.web.explorer :as explorer]))
 
 (Module cli
-  "The non-REPL entry — describe a project's declared design, check the code against it, or report
-   how far one region of it still has to go."
+  "The non-REPL entry — describe a project's declared design, check the code against it, report
+   how far one region of it still has to go, or serve it to a browser."
   (Operation findings
     "`check`'s violations with every offender eid resolved to its name — the shape a consumer
      that never loaded the model can act on. Offenders stay TUPLES: a law binding an edge
@@ -56,8 +58,10 @@
   (Operation -main
     "Entry point: dispatch the verb, build the model under the given spec-dirs, print the
      result — exit 0 satisfied, 1 unsatisfied, 2 undecidable. `report` never answers 1: it
-     measures, and only a law it could not evaluate makes it undecidable."
+     measures, and only a law it could not evaluate makes it undecidable. `explore` prints the
+     address it serves on and does not exit."
     {:signature [:=> [:catn [:args [:sequential :string]]] :nil]
      :performs  [:io :require :state :throws]
      :delegates [infra/load-model pipeline/build-model cozo-law/check lens/focus-nodes
-                 design/design-text instance/violations-text findings tally element-rows]}))
+                 design/design-text instance/violations-text findings tally element-rows
+                 explorer/start explorer/port]}))

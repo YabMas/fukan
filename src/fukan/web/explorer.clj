@@ -172,6 +172,13 @@
   [port model]
   (http/run-server (handler model) {:port port :legacy-return-value? false}))
 
+(defn ^{:malli/schema [:=> [:cat :any] :int]}
+  port
+  "The port a server `start` returned is listening on — the one it was handed, or the one it was
+   given when handed 0."
+  [server]
+  (http/server-port server))
+
 (defn ^{:malli/schema [:=> [:cat :any] :nil]}
   stop
   "Stop a server `start` returned. In-flight requests get 100 ms to finish."
