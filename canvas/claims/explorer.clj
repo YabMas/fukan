@@ -1,11 +1,15 @@
 (ns canvas.claims.explorer
-  "What the browser explorer's design commits its modules to. Each Claim's name is the id the
-   design record carries for it and its docstring is the record's statement."
+  "What the designs of the explorer, and of looking at a view without one, commit their modules
+   to. Each Claim's name is the id the design record carries for it and its docstring is the
+   record's statement."
   (:require [canvas.vocab.claim :refer [Claim]]
+            [canvas.architecture.cozo.query :as query]
             [canvas.architecture.orchestration.cli :as cli]
             [canvas.architecture.orchestration.infra :as infra]
             [canvas.architecture.orchestration.repl :as repl]
             [canvas.architecture.projection.design :as design]
+            [canvas.architecture.projection.drawing :as drawing]
+            [canvas.architecture.projection.reference :as reference]
             [canvas.architecture.projection.view :as view]
             [canvas.architecture.web.explorer :as explorer]))
 
@@ -15,9 +19,14 @@
   {:about [view/projection-view] :evidence "round"})
 
 (Claim viewer-names-no-vocabulary
-  "The view projection and the explorer mention no sort and no relation of any vocabulary; a
-   model in a vocabulary fukan does not ship is drawn by the same code."
-  {:about [view/projection-view explorer/explorer] :evidence "round"})
+  "The view projection, the drawing projection, the selection reference and the explorer — its
+   page's markup and script included — mention no sort and no relation of any vocabulary; a
+   model in a vocabulary fukan does not ship is drawn, and has its selections exemplified, by
+   the same code. The example in the page's selection input, which names a sort today, is
+   replaced by one that names none."
+  {:about [view/projection-view drawing/projection-drawing reference/projection-reference
+           explorer/explorer]
+   :evidence "round"})
 
 (Claim only-the-declared-design
   "A view's selection is the design projection's declared nodes [declared-is-one-definition],
@@ -71,7 +80,7 @@
 (Claim explorer-holds-nothing
   "The explorer obtains the model by calling the function it was started with, once per
    request, and keeps neither a model nor any viewer's state between requests. Only its caller —
-   the cockpit, or the CLI's `explore` verb — knows which model that function yields."
+   the cockpit, or the CLI's `explore` and `view` verbs — knows which model that function yields."
   {:about [explorer/explorer infra/infra-model repl/repl cli/cli] :evidence "round"})
 
 (Claim a-declaration-is-answered-by-entity-id
@@ -83,21 +92,95 @@
   {:about [explorer/explorer] :evidence "round"})
 
 (Claim request-shape-is-parsed-once
-  "The explorer serves three readings — the graph, one node's declaration
-   [a-declaration-is-answered-by-entity-id], and the relations a model offers to view by — and
-   each is answered in one form: the time the model was read for that request, and exactly one
-   tagged alternative, of which no-model is always one. The relations on offer are answered as
-   a ChoicesAnswer: those relations, as the view projection's ViewChoices, or no-model. A graph
-   request parses to a GraphRequest: tagged view with a view spec and open paths, or tagged
-   rejected with the reason — a malformed parameter or a relation name that is not among those
-   the model offers to view by. That offer is one value, the view projection's ViewChoices: the
-   parse, its rejection and the ChoicesAnswer all read it. Every graph request is answered with
-   a GraphAnswer: the time the model was read for that request, and exactly one of the graph,
-   that rejection, the engine's refusal of the selection as unanswerable, or no-model. The view
-   projection is only called with a parsed spec and paths and checks no shape."
+  "The explorer has an answer for each of four readings — the graph, its drawing, one node's
+   declaration [a-declaration-is-answered-by-entity-id], and the relations a model offers to
+   view by — and each answer has one form: the time the model was read for that request, and
+   exactly one tagged alternative, of which no-model is always one. The relations on offer are
+   answered as a ChoicesAnswer: those relations, as the view projection's ViewChoices, or
+   no-model. A graph request parses to a GraphRequest: tagged view with a view spec, open paths
+   and a palette — light when the request names none — or tagged rejected with the reason — a
+   malformed parameter, a palette that is not a Theme, or a relation name that is not among
+   those the model offers to view by. That offer is one value, the view projection's
+   ViewChoices: the parse, its rejection and the ChoicesAnswer all read it. What the explorer's
+   answer returns for a graph request is a GraphAnswer: the time the model was read for that
+   request, and exactly one of the graph, that rejection, the engine's refusal of the selection
+   as unanswerable, or no-model. A graph request whose query string fails percent-decoding in
+   the transport does not reach answer and gets none of them. A drawing request goes through
+   the same parse, and its answer is a DrawingAnswer, the graph's alternative replaced by its
+   drawing in the parsed palette. The view projection is only called with a
+   parsed spec and paths and checks no shape."
   {:about [explorer/explorer view/projection-view] :evidence "round"})
 
 (Claim web-is-below-orchestration
   "The web subsystem depends on projection, the kernel and the engine only; orchestration depends
    on it and it never on orchestration."
   {:about [explorer/explorer repl/repl view/projection-view] :evidence "round"})
+
+(Claim a-view-is-answered-without-a-server
+  "The CLI's `view` verb builds the declared design from the spec dirs alone and answers its
+   view by the explorer's own answer, handing it the verb's flags as a graph request's
+   parameters. It builds no view spec of its own, calls the view projection through nothing
+   else, and opens no port."
+  {:about [cli/cli explorer/explorer] :evidence "round"})
+
+(Claim the-address-is-the-request
+  "The page's address carries a view as a graph request's parameters — nest, link, select, open,
+   unplaced and root, under those names and in the encodings the explorer's parse reads — and
+   the page sends them as its address holds them. The ids a viewer dived through to reach the
+   root, which the breadcrumbs step back along, are kept in the address as a trail only the page
+   reads, as the selected path is. An address whose root is a JSON array of ids — the root the
+   page's script wrote before this change — is replaced before the page asks by one whose root
+   is that array's last id and whose trail is the ids before it. The explorer's `address` writes
+   a graph request's parameters as the query string its transport reads back as those
+   parameters; it takes no view spec."
+  {:about [explorer/explorer] :evidence "round"})
+
+(Claim one-drawing-for-page-and-export
+  "Where a box sits, how large it is, how an edge is routed and how each is painted — the box a
+   viewer selected included — are decided by the drawing projection and by nothing else. A
+   Drawing holds a box for every occurrence of the graph it draws, laid inside the box of the
+   occurrence that contains it, with the node's label among its marks as text, and marks for
+   every edge of that graph. The page shows the SVG the explorer answers and the CLI writes that
+   projection's SVG and PNG; the page's script computes no position, creates no box and no edge,
+   and says only which box is selected, by a class on that box's group whose paint the SVG
+   carries from the Drawing."
+  {:about [drawing/projection-drawing explorer/explorer cli/cli] :evidence "round"})
+
+(Claim encoders-decide-nothing
+  "The SVG and the PNG of a view are two writings of one Drawing, and each writes every mark of
+   its boxes, its edges and its legend. Every position, size, colour, stroke and text a writing
+   shows is a value the Drawing states: a text mark states where its text starts, so neither
+   encoder measures one, and neither holds a constant that changes how the picture looks."
+  {:about [drawing/projection-drawing] :evidence "round"})
+
+(Claim a-drawing-is-a-function-of-its-graph
+  "Drawing a view graph reads the graph and the palette asked for and nothing else — no model,
+   no font, no clock — so the same graph yields the same Drawing on any machine."
+  {:about [drawing/projection-drawing] :evidence "round"})
+
+(Claim an-engine-refusal-is-a-sentence
+  "A query the engine refuses leaves the query compiler's `q` as an exception whose message is
+   plain text: no terminal escape code and no generated script, the engine's error code named.
+   A call to a rule that does not exist names the clause that made it, and says to write
+   `or-join` when that clause is headed `or`. An unsafe negation names the negated clauses and
+   says that a positive clause must bind each of their variables first."
+  {:about [query/cozo-query] :evidence "round"})
+
+(Claim the-reference-ran-what-it-prints
+  "The selection reference for a model states the clause forms a selection may use, the
+   attributes its declared nodes carry, and that a view draws a link edge only between two
+   selected nodes; and it holds a worked selection of each of four kinds — one sort, a union of
+   sorts, a grouping with its members, nodes by id prefix with their members — built from that
+   model's own sorts, relations and ids. Where the model cannot supply one, the reference
+   says in that selection's place that no such example exists for this model.
+   Every selection it prints was evaluated against that model to print it and is shown with the
+   number of nodes it selected."
+  {:about [reference/projection-reference] :evidence "round"})
+
+(Claim the-reference-is-held-by-a-test
+  "A test prints the selection reference for a model that declares at least two sorts and a
+   relation with stored edges. It fails unless the text holds a worked selection of each of the
+   four kinds — one sort, a union of sorts, a grouping with its members, nodes by id prefix
+   with their members — and it reads every selection back out of the text and evaluates each
+   through the selection engine against that model, failing on one the engine refuses."
+  {:about [reference/projection-reference] :evidence "round"})

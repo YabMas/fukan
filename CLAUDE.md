@@ -148,10 +148,20 @@ no extracted node, no drift. Three pieces, each ignorant of the next one up:
   selection — judging it over the selection makes every module "unplaced" the moment a
   selection drops its operations. A spec may be ROOTED (`:root`, an entity id): that node's
   direct members become the root level, and nothing outside it — node or edge — is drawn.
-- `web/explorer.clj` — the HTTP side and the one place a request is parsed. It is started with
+- `web/explorer.clj` — the HTTP side and the one place a request is parsed (`address` writes
+  the same grammar back; the CLI's `view` verb hands its flags to `answer` rather than parse). It is started with
   a FUNCTION yielding the current model and holds nothing between requests; what a viewer opened
   lives in the page address. ⚠ Never hand it (or cache in it) a db: a reload closes the handle.
-- `resources/public/explorer.{html,js}` — the page; layout is elkjs, loaded from a CDN.
+- `canvas/projection/drawing.clj` — `draw`: a view graph → a DRAWING, every position, size and
+  colour as data (layout is Eclipse ELK, on the JVM), and `svg`/`png`, which write a Drawing and
+  decide nothing. One drawing for the page and for an exported image. ⚠ A box is sized from its
+  label's LENGTH, never a font — a font differs per machine, and `draw` must be a function of
+  its graph alone.
+- `resources/public/explorer.{html,js}` — the page. It DRAWS NOTHING: it shows the SVG
+  `api/drawing` answers and says only which box is selected (a class on that box's group, whose
+  paint the SVG carries). Its address holds the view as the request's own parameters — `nest`,
+  `link`, `select`, `open`, `unplaced`, `root` — sent as held; `trail`, `sel` and `embed` are the
+  page's alone.
   It requests only RELATIVE urls, so a host may serve it under a path prefix (forwarding `api/*`
   and `explorer.js` beneath it); `embed=1` drops its own title for use in an iframe.
 Stored, named views (a `View` structure a canvas authors) do not exist: a view is chosen in the
@@ -789,7 +799,12 @@ mixing them corrupts history.
   the code moved would not be a declaration (it is also 40ms instead of 8s). Exit **0** satisfied /
   **1** unsatisfied / **2** UNDECIDABLE — a consumer must tell "your design is violated" from "the
   checker broke", or it waves through the branch that broke the checker. stdout is the report,
-  stderr is the narration
+  stderr is the narration. Two more verbs LOOK rather than judge, both design-only like
+  `describe`: `… view --nest child [--link …] [--select …] [--open …] [--root …] [--out v.png]`
+  (one view with no server: the graph, the address that opens it in an explorer, and with `--out`
+  a PNG + SVG) and `… selection` (the selection language for THIS model — every example printed
+  was run; `canvas/projection/reference.clj`). An engine refusal of a selection is a plain
+  sentence naming the clause (`cozo/query.clj` `refusal`), not cozo's terminal diagnostic
 - `src/fukan/canvas/projection/prose.clj` — the PROSE dual: the same declarations as SENTENCES.
   A form dual renders the AUTHOR's view (`{:may-depend [:* Band]}` is what you would write to
   change it); a reader who has to OBEY the design wants to be told the rule, not to infer it from

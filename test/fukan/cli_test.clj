@@ -185,6 +185,28 @@
     (let [{:keys [out]} (#'cli/run ["view" "--nest" "child" "--explorer" "http://localhost:7410/?nest=link&root=x"])]
       (is (= "http://localhost:7410/?nest=child" (:address (edn/read-string out)))))))
 
+(deftest the-image-view-writes-is-the-drawing-its-address-is-answered-with
+  (testing "one drawing: the SVG beside `--out` is byte for byte the SVG a running explorer answers
+            the printed address with, and a rooted view's address carries the root as one id"
+    (let [held   (atom nil)
+          answer explorer/answer
+          web    "canvas.architecture.subsystems/web"
+          file   (java.io.File/createTempFile "fukan-view" ".png")
+          {:keys [code out error]}
+          (with-redefs [explorer/answer (fn [model params] (reset! held model) (answer model params))]
+            (#'cli/run ["view" "--nest" "child" "--link" "may-depend" "--root" web
+                        "--explorer" "http://example.test/" "--out" (str file)]))
+          {:keys [address graph image]} (edn/read-string out)
+          query  (second (re-matches #"[^?]*\?(.*)" address))
+          asked  (#'explorer/query-params {:query-string query})]
+      (is (= 0 code) error)
+      (is (= web (get asked "root")) "the root is the id itself, as the page's address keeps it")
+      (is (seq (:nodes graph)))
+      (is (= [:drawing (:svg (second (:answer (explorer/drawing @held asked))))]
+             [:drawing (slurp (:svg image))]))
+      (.delete (java.io.File. ^String (:png image)))
+      (.delete (java.io.File. ^String (:svg image))))))
+
 (deftest view-refuses-an-out-path-its-svg-would-overwrite
   (doseq [ext [".svg" ".SVG"]]
     (let [f (java.io.File/createTempFile "fukan-view" ext)

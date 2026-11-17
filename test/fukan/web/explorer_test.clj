@@ -6,6 +6,7 @@
    namespace's own: parsing, the four alternatives of an answer, and that the model is read
    through the function it was handed at the moment of each request."
   (:require [cheshire.core :as json]
+            [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.structure :refer [defstructure]]
             [fukan.cozo.build :as build]
@@ -56,7 +57,7 @@
     (is (re-find #"select" (rejected {"nest" "xholds" "select" "(XShelf ?n"})))
     (is (re-find #"select" (rejected {"nest" "xholds" "select" "42"})))
     (testing "a parameter PRESENT with no value is refused, not read as absent"
-      (doseq [p ["select" "open" "root" "unplaced" "theme"]]
+      (doseq [p ["select" "open" "root" "unplaced" "theme" "link"]]
         (is (re-find (re-pattern p) (str (rejected {"nest" "xholds" p ""}))) p))
       (is (re-find #"unplaced" (str (rejected {"nest" "xholds" "unplaced" "yes"})))))))
 
@@ -169,3 +170,28 @@
       (is (= "drawing" (first (:answer (get "/api/drawing?nest=xholds")))))
       (is (some #(= "xholds" (:name %)) (:relations (second (:answer (get "/api/views"))))))
       (finally (explorer/stop server)))))
+
+(deftest the-page-draws-nothing-and-names-no-vocabulary
+  (let [page   (slurp (io/resource "public/explorer.html"))
+        script (slurp (io/resource "public/explorer.js"))]
+    (testing "the only script is the page's own: no layout library is loaded"
+      (is (= ["explorer.js"] (map second (re-seq #"<script[^>]*src=\"([^\"]+)\"" page)))))
+    (testing "the script creates no drawing element and holds no paint for one"
+      (is (not (re-find #"createElementNS|<rect|<path|<polyline" script)))
+      (is (not (re-find #"(?i)\belk\b|hsl\(" script)))
+      (is (not (re-find #"g\.box[^{]*\{[^}]*(fill|stroke)" page))))
+    (testing "it asks for the drawing, with the address's own view parameters"
+      (is (re-find #"api/drawing" script))
+      (is (re-find #"\['nest', 'link', 'select', 'open', 'unplaced', 'root'\]" script)))
+    (testing "the root is read from the address as one id, and an array root is replaced first"
+      (is (re-find #"root: q\.get\('root'\) \|\| ''" script))
+      ;; Every reading of the address — at load, on Back/Forward, for each request — is
+      ;; `address()`, so the rewrite lives there and no read can see an array root.
+      (let [at   (.indexOf script "const address = () =>")
+            body (when (<= 0 at) (subs script at (.indexOf script "\n};" at)))]
+        (is (some? body))
+        (is (re-find #"root\.startsWith\('\['\)" (str body)))
+        (is (re-find #"history\.replaceState" (str body))))
+      (is (= 1 (count (re-seq #"new URLSearchParams\(location\.search\)" script)))))
+    (testing "no sort and no relation of fukan's vocabulary is written in either"
+      (is (not (re-find #"Module|Subsystem|Operation|may-depend|\(Band" (str page script)))))))

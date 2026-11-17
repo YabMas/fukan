@@ -68,19 +68,22 @@
    none; a graph answer does not depend on it, and it is still refused when it is no palette.
    A parameter PRESENT with no value is refused rather than read as absent: whoever sent it
    asked for something, and answering as if they had not would hand back a view they did not
-   ask for. (`link`, whose empty value is the request for no link edges, is the exception.)"
+   ask for. No link edges is asked for by leaving `link` out."
   [db params]
   (let [known  (into #{} (map :name) (:relations (view/views db)))
         theme  (get params "theme" "light")
         root   (get params "root")
         unplaced (get params "unplaced")
         nest   (names (get params "nest"))
-        link   (names (get params "link"))
+        link-param (get params "link")
+        link   (names link-param)
         open   (read-open (get params "open"))
         select (read-select (get params "select"))
         stray  (remove known (concat nest link))]
     (cond
       (empty? nest)           [:rejected "nest: name at least one relation to nest by"]
+      (and (some? link-param) (empty? link))
+      [:rejected "link: name the relations to draw as edges, or leave link out for none"]
       (seq stray)             [:rejected (str "not a relation this model offers to view by: "
                                               (str/join ", " (distinct stray)))]
       (nil? open)             [:rejected "open: expected a JSON array of paths, each an array of ids"]
