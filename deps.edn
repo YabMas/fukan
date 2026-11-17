@@ -23,7 +23,13 @@
         ;; 0.7.1 runs `(init {:dirs (classpath-dirs)})` unconditionally at ns-load, which
         ;; walks the WHOLE consumer tree (node_modules, target, .git) before any fukan code
         ;; runs — an OOM on a real project. The cockpit inits its own scoped dirs in `go`.
-        io.github.tonsky/clj-reload {:mvn/version "1.0.0"}}
+        io.github.tonsky/clj-reload {:mvn/version "1.0.0"}
+        ;; Graph layout for the drawing projection (`fukan.canvas.projection.drawing`): the
+        ;; layered algorithm, run on the JVM so a view has ONE drawing — the page's and the
+        ;; exported image's. Pure Java, about 9 MB with EMF and Guava behind it.
+        org.eclipse.elk/org.eclipse.elk.core {:mvn/version "0.9.1"}
+        org.eclipse.elk/org.eclipse.elk.graph {:mvn/version "0.9.1"}
+        org.eclipse.elk/org.eclipse.elk.alg.layered {:mvn/version "0.9.1"}}
  :aliases
  {:run {:main-opts ["-m" "fukan.core"]
         :extra-paths ["."]}
