@@ -127,6 +127,9 @@
    fukan.canvas.projection.instance-test/INode hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/ITarget hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/IVal hooks.fukan.structure/instance
+   fukan.canvas.projection.reference-test/Kind hooks.fukan.structure/instance
+   fukan.canvas.projection.reference-test/RefCrate hooks.fukan.structure/instance
+   fukan.canvas.projection.reference-test/RefJar hooks.fukan.structure/instance
    fukan.canvas.projection.view-test/VCrate hooks.fukan.structure/instance
    fukan.canvas.projection.view-test/VPart hooks.fukan.structure/instance
    fukan.cli-test/Card hooks.fukan.structure/instance

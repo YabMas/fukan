@@ -22,6 +22,7 @@
             [canvas.architecture.projection.prose :refer [projection-prose]]
             [canvas.architecture.projection.view :refer [projection-view]]
             [canvas.architecture.projection.drawing :refer [projection-drawing]]
+            [canvas.architecture.projection.reference :refer [projection-reference]]
             [canvas.architecture.web.explorer :refer [explorer]]
             [canvas.architecture.orchestration.pipeline :refer [model-pipeline]]
             [canvas.architecture.orchestration.infra :refer [infra-model]]
@@ -65,7 +66,7 @@
    (Lens/Projection/Check) and its selection engine (core-lens), the inspection print-duals that
    re-present the model as authored forms (instance/grammar), the system map (architecture), and the
    visible graph a view spec asks for (view). Reads the model through the engine's `q`."
-  {:child [core-lens projection-instance projection-grammar projection-design projection-prose architecture projection-view projection-drawing] :may-depend [kernel cozo]})
+  {:child [core-lens projection-instance projection-grammar projection-design projection-prose architecture projection-view projection-drawing projection-reference] :may-depend [kernel cozo]})
 
 (Subsystem web
   "The browser surface — serves readings of a model it is handed and holds none. Depends on
