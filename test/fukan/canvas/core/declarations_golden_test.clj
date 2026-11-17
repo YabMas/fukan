@@ -520,7 +520,12 @@
 ;; relations over them (`entity-references`, `view-reads`, `ns-reads`). Terms 186→213 (+27).
 ;; Laws 98→108 (+10), every one GENERATED from a slot's quantifier, target sort or enum: the
 ;; producer authors none, since a model producer adds facts and no laws of its own.
-(def ^:private golden-terms {:count 213 :hash -579161955})
+;; 2026-11-17 (later): a produced node carries its PLANE — one substrate rule,
+;; `(plane ?n ?p)`. Terms 213→214 (+1). Nothing else moved, and that was checked rather than
+;; assumed: the same change gave a correspondence an optional BRIDGE name, and with the plane
+;; rule set aside the snapshot hashes exactly as it did before — the ambient bridge's terms are
+;; byte-identical, which is what "a second bridge does not disturb the first" has to mean here.
+(def ^:private golden-terms {:count 214 :hash 794170478})
 ;; 2026-09-22 (later still): every authored law in the shipped vocabulary carries a stable `:key`
 ;; — Region, Band, Subsystem, Stratum, Kind and the malli dialect were reachable only by matching
 ;; their DESCRIPTION, which goes silently green when the sentence is reworded and silent altogether

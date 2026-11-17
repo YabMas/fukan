@@ -20,15 +20,16 @@
             [fukan.common.extraction.core :as target]
             [fukan.common.extraction.lexicon :as lexicon]))
 
-;; Register the project FACT extractor: the Clojure source as the engine-agnostic `{:roots}` facts
-;; the native Cozo build consumes, with the project's Lexicon declarations read from the same tree
-;; merged onto them. One slot, two producers: a Lexicon view points at the namespace declaring it
-;; by name, so its roots only assemble beside the Clojure extractor's. The Lexicon producer adds
-;; nothing for a project that binds no `lexicon/*sources*`.
+;; Register the project FACT extractor: two producers over one source tree, each contributing
+;; the facts of its own PLANE — the Clojure source as code, the project's Lexicon declarations as
+;; its domain. The labels are this composition's to choose; the kernel stamps what it is handed.
+;; One slot, because a Lexicon view points at the namespace declaring it by name, and a reference
+;; across planes resolves only when both sets of roots assemble together. The Lexicon producer
+;; adds nothing for a project that binds no `lexicon/*sources*`.
 (extraction/register-fact-extractor!
  (fn [root]
-   {:roots (into (:roots (target/extract-roots [root]))    ; target -> fukan.common.extraction.core
-                 (:roots (lexicon/extract-roots [root])))}))
+   {:planes {"code"   (:roots (target/extract-roots [root]))    ; target -> fukan.common.extraction.core
+             "domain" (:roots (lexicon/extract-roots [root]))}}))
 
 (defonce ^:private state (atom {:cozo nil :src nil}))
 

@@ -14,7 +14,9 @@
    two PROVENANCE strata over the stratum attribute (`substrate/stratum-attr` = `:val/extracted`,
    embedded literally here because these rules are pure quoted data — keep in sync): `(fact ?n)`
    a node stamped by the build as extracted-from-code, `(design ?n)` an authored node (the
-   positive `:structure/of` clause keeps the rule range-bound under negation).
+   positive `:structure/of` clause keeps the rule range-bound under negation). `(plane ?n ?p)`
+   reads the label a produced node arrived under (`substrate/plane-attr` = `:val/plane`, embedded
+   literally for the same reason) — a name the composition chose; the kernel knows none.
 
    `contains` and `within` are NOT here and no longer anywhere in the kernel: they are declared by
    the VOCABULARY as relation elements (`fukan.common.vocab.grouping` / `…vocab.code.module`). Until
@@ -22,4 +24,5 @@
    relation, which was true only because the hardcoding sat one file over, in `structure/terms-of`."
   '[[(named ?e ?n) [?e :entity/name ?n]]
     [(fact ?n) [?n :val/extracted true]]
+    [(plane ?n ?p) [?n :val/plane ?p]]
     [(design ?n) [?n :structure/of ?_k] (not [?n :val/extracted true])]])

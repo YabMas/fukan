@@ -316,10 +316,32 @@ SPECIALIZED vocabulary + its mechanism together, not scattered into general voca
   TOLD where to look — bind `*sources*` (`{:vocabulary [ns-prefix…] :view #{maker-symbol…}}`):
   an entity is a `[:map …]` in a `def` like every other schema, and the view maker is usually the
   adopter's own closure over its vocabulary. Unbound, it reads nothing. The composition root merges
-  its roots with the Clojure extractor's (a view points at its namespace by name). NOT wired into
-  the cockpit or `fukan.cli` yet, and the facts are EXTRACTED-stratum, so the explorer (declared
-  design only) does not draw them — whether a vocabulary a project authored in Lexicon's notation
-  is declared design is an open call.
+  its roots with the Clojure extractor's (a view points at its namespace by name), each under its
+  own PLANE label (`"code"`, `"domain"` — see BRIDGES AND PLANES below). NOT wired into the cockpit
+  or `fukan.cli` yet, and the explorer still draws authored nodes only, so it does not draw the
+  domain plane.
+
+**BRIDGES AND PLANES (2026-11-17).** A correspondence is a statement about two PLANES of the one
+graph, and nothing in its lowering is about code: a pairing rule over two sort tags, a
+`realized-<rel>` rule conjugating a path on the far plane by the pairing, identity on shared
+values. What WAS bound to design↔code was that there was one of it. ⚠ Demonstrated before the
+fix: a second, unnamed bridge pairing a Module with a Lexicon entity of the same name made
+`:correspondence/module-unrealized` go SILENT for a Module no namespace realizes — every law
+reading the ambient `corresponds` read the other bridge's pairs too. So:
+- `(correspond :bridge-name [A ?a B ?b] match map)` — a leading keyword names the BRIDGE the
+  correspondence is a component of. A bridge is one map between two planes; its components (one
+  per sort) pair and realize through EACH OTHER (Module ↦ Ns and Operation ↦ Fn are two components
+  of one bridge, which is why the index is the bridge and not the declaration). It lowers to
+  `corresponds-<bridge>` / `realized-<bridge>-<rel>`, and a `corresponds` in its match body means
+  its own. UNNAMED is the ambient bridge, lowering exactly as before — design↔code is still that
+  one, and the six laws are bound to it by reading the unnamed relation, nothing more.
+  `structure/pairing-relation` gives a bridge's pairing symbol; the correspondence card and
+  print-dual read each bridge through its own.
+- A PRODUCED node carries its plane as a label (`:val/plane`, read by the substrate rule
+  `(plane ?n ?p)`). The build stamps whatever label facts arrive under — the facts map takes
+  `:planes {label roots}` beside the unlabelled `:roots` — and the kernel names none; the
+  composition root names `"code"` and `"domain"`. `(fact ?n)` still means produced-not-authored,
+  on any plane; an authored node has no plane label and `(design ?n)` is unchanged.
 
 `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — GRAMMAR REFLECTION, kernel-native
 **CORE machinery** (NOT the reusable `fukan.common` vocab): `reflect`/`with-grammar` reifies the registry

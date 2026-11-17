@@ -1050,8 +1050,8 @@
    `realized-<rel>` rule (a bare `(= from to)` unification Cozo cannot ground), so it throws here.
    Aux extraction preserves zero-admittance, so the raw entry is the faithful test. Then cross-ns
    re-registration THROWS (mirrors `register-structure!`'s relation guard); same-ns replaces (REPL reload)."
-  [{:keys [design fact map ns] :as config}]
-  (let [k [design fact]]
+  [{:keys [design fact map ns bridge] :as config}]
+  (let [k (cond-> [design fact] bridge (conj bridge))]   ; one sort pair may sit in two bridges
     (when-let [sdef (structure-by-tag design)]
       (doseq [sl (remove scalar-slot? (:slots sdef))]
         (when-not (contains? map (:rel sl))
@@ -1086,10 +1086,20 @@
         :performs  [:cat [:* :calls] :performs]
         :delegates [:cat :calls [:* [:cat [:not public] :calls]]]})
 
+   A leading keyword NAMES THE BRIDGE the correspondence is a component of:
+   `(correspond :domain [Concept ?c Entity ?e] …)`. A bridge is one map between two planes, and its
+   components — one per sort — pair and realize through EACH OTHER and through nothing else: the
+   pairing relation is `corresponds-<bridge>`, each entry mints `realized-<bridge>-<rel>`, and a
+   `corresponds` written in the match body means this bridge's own. Unnamed, a correspondence is
+   a component of the one ambient bridge, exactly as before there was a second.
+
    Pairing joins into the ambient `corresponds`; each entry mints `realized-<rel>` (an E-path
    between witnesses — a `^:value` node is its own witness); coverage classes are READINGS,
    not laws. Checks are ordinary laws over these rules, authored separately."
-  [head match rmap]
+  [& args]
+  (let [[bridge head match rmap] (if (keyword? (first args)) args (cons nil args))]
+  (when-not (= (if bridge 4 3) (count args))
+    (throw (ex-info "correspond takes [bridge-name]? head match realization-map" {:args args})))
   (when-not (and (vector? head) (= 4 (count head))
                  (symbol? (nth head 0)) (dvar? (nth head 1))
                  (symbol? (nth head 2)) (dvar? (nth head 3)))
@@ -1099,7 +1109,8 @@
         ftag  (resolve-struct-tag fsym)
         match (resolve-sorts match)]         ; the SAME (is …) pass law bodies get
     `(register-correspond! {:design ~dtag :fact ~ftag :dvar '~dvar :fvar '~fvar
-                            :match '~match :map '~rmap :ns (str *ns*)})))
+                            :bridge ~bridge
+                            :match '~match :map '~rmap :ns (str *ns*)}))))
 
 (defn- parse-law
   "(law \"desc\" {:offenders [?vars] :where [clauses] :rules [rules]? :scope <tag|:global>? :key k?})
@@ -1579,6 +1590,19 @@
       [:alt pfx (into [:cat] (conj prefix (if (= q :?) x [:+ x])))])
     expr))
 
+(defn ^{:malli/schema [:=> [:cat :any] :any]}
+  pairing-relation
+  "The pairing relation of `bridge`, as a rule symbol: `corresponds-<bridge>`, or the ambient
+   `corresponds` for the unnamed one (nil). What a reader of a correspondence asks through, so a
+   reading of one bridge never counts another's pairs."
+  [bridge]
+  (if bridge (symbol (str "corresponds-" (name bridge))) 'corresponds))
+
+(defn- realized-sym
+  "The realization relation of `rel` in `bridge`: `realized-<rel>` for the unnamed one."
+  [bridge rel]
+  (symbol (str "realized-" (when bridge (str (name bridge) "-")) (name rel))))
+
 (defn- entry-rules
   "The rules for one realization entry `rel ↦ expr` of correspondence `c`. The `realized-<rel>`
    rule CONJUGATES the fact-graph path with the pairing relation on both ends — a design edge
@@ -1589,8 +1613,9 @@
    (`:+ ↦ aux`, `:* ↦ [:? aux]`). A resulting TRAILING zero-admitting step is then distributed
    (`distribute-trailing-closure`) so its reflexive case stays groundable. Inline `path` contexts
    still reject compound closure. Each rule's variables are rule-local: the aux rules use `?a/?b/?m`."
-  [{:keys [dvar]} rel expr]
-  (let [rname (symbol (str "realized-" (name rel)))
+  [{:keys [dvar bridge]} rel expr]
+  (let [rname (realized-sym bridge rel)
+        pair  (pairing-relation bridge)
         aux-n (atom 0)
         auxes (atom [])
         ;; rewrite each compound closure bottom-up into a minted aux ATOM before the path steps see it
@@ -1612,25 +1637,35 @@
         wd    '?_cd     ; the design node's fact witness
         we    '?_cw     ; the realized design node's fact witness
         e     '?_ce]    ; the realized design node
-    (into [(into [(list rname dvar e) (list 'corresponds dvar wd)]
+    (into [(into [(list rname dvar e) (list pair dvar wd)]
                  (concat (reach-clauses (distribute-trailing-closure expr') wd we)
-                         [(list 'corresponds e we)]))]
+                         [(list pair e we)]))]
           @auxes)))
 
 (defn- correspond-terms
   "All rules one registered correspondence lowers to: the pairing rule + every entry's rules."
-  [{:keys [design fact dvar fvar match] rmap :map :as c}]
-  (into [(into [(list 'corresponds dvar fvar)
+  [{:keys [design fact dvar fvar match bridge] rmap :map :as c}]
+  (into [(into [(list (pairing-relation bridge) dvar fvar)
                 [dvar :structure/of design] [fvar :structure/of fact]]
-               match)]
+               ;; inside a named bridge, `corresponds` is that bridge's own pairing: its
+               ;; components nest within each other, never within another bridge's
+               (if bridge
+                 (walk/postwalk #(if (and (seq? %) (= 'corresponds (first %)))
+                                   (cons (pairing-relation bridge) (rest %))
+                                   %)
+                                match)
+                 match))]
         (mapcat (fn [[rel expr]] (when expr (entry-rules c rel expr))) rmap)))
 
 (defn- value-reflexivity-terms
   "One `corresponds(?v ?v)` rule per `^:value` structure — a content-identified value is its own
-   witness, which is what makes the pairing relation total on shared sorts (no case analysis)."
-  [structures]
-  (for [sd structures :when (:value? sd)]
-    [(list 'corresponds '?v '?v) ['?v :structure/of (:tag sd)]]))
+   witness, which is what makes the pairing relation total on shared sorts (no case analysis).
+   Once for the ambient bridge and once for each of the named `bridges`: every bridge is the
+   identity on the values both its planes share."
+  [structures bridges]
+  (for [bridge (cons nil (sort bridges))
+        sd     structures :when (:value? sd)]
+    [(list (pairing-relation bridge) '?v '?v) ['?v :structure/of (:tag sd)]]))
 
 ;; The kernel declaration algebra is deliberately closed. Vocabulary grows through structures,
 ;; relations, rules, laws, and derived authoring forms—not by installing new evaluator semantics.
@@ -1792,14 +1827,14 @@
   (let [structures (-> (vec structures)
                        validate-closed-relation-heads!
                        validate-distinct-rule-names!)
-        in-scope   (into #{} (map :tag) structures)]
+        in-scope   (into #{} (map :tag) structures)
+        bridged    (filter #(contains? in-scope (:design %)) (all-corresponds))]
     (vec (distinct (concat (mapcat (fn [sdef]
                                      (mapcat #(:terms (lower-declaration % sdef)) (sdef->declarations sdef)))
                                    structures)
                            (mapcat closure-rules (binary-rule-names structures))
-                           (mapcat correspond-terms
-                                   (filter #(contains? in-scope (:design %)) (all-corresponds)))
-                           (value-reflexivity-terms structures)
+                           (mapcat correspond-terms bridged)
+                           (value-reflexivity-terms structures (distinct (keep :bridge bridged)))
                            rules/substrate-rules)))))
 
 (defn ^{:malli/schema [:=> [:cat :any] :any]}

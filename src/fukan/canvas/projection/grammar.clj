@@ -181,8 +181,13 @@
    defstructure form (correspondence is EXTERNAL)."
   [db eid]
   (let [tag (ffirst (cq/q '[:find ?t :in $ ?s :where [?s :val/tag ?t]] db eid))]
-    (when-let [c (first (filter #(= tag (str (:design %))) (s/all-corresponds)))]
-      (list 'correspond (corr-head c) (:match c) (:map c)))))
+    ;; a design sort may sit in several bridges; this renders ONE form, so the choice is fixed:
+    ;; the ambient bridge's component when there is one, else the first by bridge name
+    (when-let [c (first (sort-by (comp str :bridge)
+                                 (filter #(= tag (str (:design %))) (s/all-corresponds))))]
+      (if-let [bridge (:bridge c)]
+        (list 'correspond bridge (corr-head c) (:match c) (:map c))
+        (list 'correspond (corr-head c) (:match c) (:map c))))))
 
 ;; ── the primer (reference-card string) ───────────────────────────────────────
 
@@ -270,21 +275,22 @@
    construction (a design tag never carries `:val/extracted`), so `(design dvar)` is a defensive
    restatement, not new selectivity; the gate keeps this 0, not a false backlog, when the fact sort
    has no instances yet (extraction hasn't run)."
-  [db {:keys [design fact dvar]}]
+  [db {:keys [design fact dvar bridge]}]
   (reading-count db dvar
                  [(list 'is dvar design)
                   (list 'design dvar)
                   (list 'is '?_gate fact)
-                  (list 'not-join [dvar] (list 'corresponds dvar '?_f))]))
+                  (list 'not-join [dvar] (list (s/pairing-relation bridge) dvar '?_f))]))
 
 (defn- ambiguous-count
   "Design elements paired with MORE THAN ONE distinct fact partner."
-  [db {:keys [design dvar]}]
-  (reading-count db dvar
-                 [(list 'is dvar design)
-                  (list 'corresponds dvar '?_f1)
-                  (list 'corresponds dvar '?_f2)
-                  [(list 'not= '?_f1 '?_f2)]]))
+  [db {:keys [design dvar bridge]}]
+  (let [pair (s/pairing-relation bridge)]   ; this bridge's pairs, never another's
+    (reading-count db dvar
+                   [(list 'is dvar design)
+                    (list pair dvar '?_f1)
+                    (list pair dvar '?_f2)
+                    [(list 'not= '?_f1 '?_f2)]])))
 
 (defn- fmt-correspond
   "One registered essential correspondence → its card entry: the authored `(correspond …)` data
@@ -294,11 +300,11 @@
    deliberately NOT here: it requires naming the fact sort's own `public` predicate, which this
    kernel tier (ships no domain vocabulary) must not do — `dev/user.clj`'s `(correspondence)`
    appends it after the card, reading the public-unaccounted law by key."
-  [db {:keys [match] rmap :map :as c}]
+  [db {:keys [match bridge] rmap :map :as c}]
   (let [unrealized (unrealized-count db c)
         ambiguous  (ambiguous-count db c)]
     (str/join "\n"
-              [(str "(correspond " (pr-str (corr-head c)))
+              [(str "(correspond " (when bridge (str (pr-str bridge) " ")) (pr-str (corr-head c)))
                (str "  " (pr-str match))
                (str "  " (pr-str rmap) ")")
                (str "  unrealized: " unrealized "  ambiguous: " ambiguous)])))
@@ -314,7 +320,7 @@
    predicate — vocabulary this kernel tier must not name) is `dev/user.clj`'s business, appended
    after this card."
   [db]
-  (let [cs (sort-by (comp name :design) (s/all-corresponds))]
+  (let [cs (sort-by (juxt (comp str :bridge) (comp name :design)) (s/all-corresponds))]
     (str/join "\n\n"
               (into ["━━ CORRESPONDENCE — design ↔ fact ━━"]
                     (map #(fmt-correspond db %) cs)))))

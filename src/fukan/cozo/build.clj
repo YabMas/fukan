@@ -175,6 +175,22 @@ alle[e] := *t_bool[e, _, _]
      (concat (for [id new-ids, [a v] (by-id id) :when (some? v)] [(new-eid id) a v])
              (for [[id r] rel-by-id, [a v] r] [(rel-eid id) a (ref->eid v)])))))
 
+(defn- in-plane
+  "`iv`, and every non-value instance nested in it, labelled as belonging to `plane`. A `^:value`
+   node is left alone for the reason `stamp-stratum` leaves it: equal values are one node, on
+   whichever planes they occur."
+  [plane iv]
+  (if (:value? iv)
+    iv
+    (-> iv
+        (update :scalars assoc sub/plane-attr plane)
+        (update :clauses
+                (fn [cs]
+                  (mapv (fn [c]
+                          (update c :targets
+                                  (fn [ts] (mapv #(if (sub/instance-value? %) (in-plane plane %) %) ts))))
+                        cs))))))
+
 (defn ^{:malli/schema [:=> [:cat [:vector :symbol] :map] :CozoDb]}
   model->cozo
   "Native FULL build: the instance-vars of canvas `ns-syms` + the
@@ -183,14 +199,18 @@ alle[e] := *t_bool[e, _, _]
    extracted `:calls` graph, wired as natural-key `Ref`s — without a union/merge or a post-build
    grounding pass. The optional `:ground` closure remains a generic post-build seam (a different
    extractor may need one; the Clojure extractor no longer does). Returns the open Cozo db."
-  [ns-syms {:keys [roots ground]}]
+  [ns-syms {:keys [roots planes ground]}]
   (-> (mirror/load-datoms
        (instances->datoms
         (concat (roots-of (collect ns-syms))
                 ;; provenance is the KERNEL's: every non-value node arriving through the
                 ;; extraction plug-point is stamped fact-stratum HERE — extractors no longer
                 ;; hand-stamp (`sub/stamp-stratum` skips ^:value targets)
-                (map (fn [[id iv]] [id (sub/stamp-stratum iv)]) roots))))
+                (map (fn [[id iv]] [id (sub/stamp-stratum iv)]) roots)
+                ;; facts arriving under a PLANE are stamped the same way and labelled with it.
+                ;; The label is whatever the composition named; nothing here reads it.
+                (for [[plane rs] planes, [id iv] rs]
+                  [id (in-plane plane (sub/stamp-stratum iv))]))))
       ;; the extractor's post-build grounding hook (e.g. grounding the :calls graph) — the engine
       ;; calls it generically, naming no code-vocab
       (cond-> ground ground)
