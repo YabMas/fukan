@@ -2,7 +2,9 @@
  ;; Lexicon has no published coordinate yet: it is read from a checkout beside fukan's.
  :deps {org.clojure/clojure {:mvn/version "1.11.1"}
         metosin/malli {:mvn/version "0.16.4"}
-        lexicon/lexicon {:local/root "../../../lexicon"}}
+        lexicon/lexicon {:local/root "../../../lexicon"}
+        ;; the request-handling vocabulary, shared between systems
+        reference/web {:local/root "../web"}}
  :aliases
  {;; clojure -M:test — the code runs, with every signature enforced
   :test {:extra-paths ["test"]

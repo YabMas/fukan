@@ -22,6 +22,7 @@
    fukan.common.extraction.lexicon/Value hooks.fukan.structure/instance
    fukan.common.extraction.lexicon/View hooks.fukan.structure/instance
    fukan.common.extraction.lexicon/ViewUse hooks.fukan.structure/instance
+   fukan.common.extraction.lexicon/Vocabulary hooks.fukan.structure/instance
    fukan.common.typing.malli/NamedType hooks.fukan.structure/instance
    fukan.common.typing.malli/Schema hooks.fukan.structure/instance
    fukan.common.typing.malli/SchemaChoice hooks.fukan.structure/instance

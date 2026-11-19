@@ -1,0 +1,5 @@
+{:paths ["src"]
+ ;; Lexicon has no published coordinate yet: it is read from a checkout beside fukan's.
+ :deps {org.clojure/clojure {:mvn/version "1.11.1"}
+        metosin/malli {:mvn/version "0.16.4"}
+        lexicon/lexicon {:local/root "../../../lexicon"}}}

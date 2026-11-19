@@ -6,7 +6,9 @@
             [malli.instrument :as mi]
             [shop.billing :as billing]
             [shop.checkout :as checkout]
-            [shop.store :as store]))
+            [shop.front :as front]
+            [shop.store :as store]
+            [web.routing :as routing]))
 
 (use-fixtures :once (fn [f] (mi/instrument!) (f) (mi/unstrument!)))
 
@@ -47,3 +49,20 @@
   (is (m/validate :customer/address (billing/destination 1)))
   (checkout/place 100 1 [10 11])
   (is (= 24 (billing/owed 100))))
+
+(deftest a-request-becomes-something-the-shop-understands
+  (store/put! :web.session {:web.session/id "s1" :web.session/started 0})
+  (store/put! :login {:login/id 5 :login/customer 1 :login/session "s1"})
+  (checkout/place 100 1 [10])
+  (let [signed-in {:web.request/id "r1" :web.request/session "s1"}
+        stranger  {:web.request/id "r2" :web.request/session nil}]
+    (testing "the one function that speaks both languages"
+      (is (= 1 (front/customer signed-in)))
+      (is (nil? (front/customer stranger))))
+    (is (= {:order/id 100 :order/total 4 :customer/name "Ada"} (front/receipt signed-in 100)))
+    (is (nil? (front/receipt stranger 100)))
+    (testing "a request that is not one is refused in the other vocabulary's words"
+      (is (thrown? Exception (front/customer {:web.request/id 7}))))
+    (testing "the library's own step reads only its part of a request"
+      (is (= "get /orders/:id"
+             (routing/route-key {:web.request/method :get :web.request/path "/orders/100"}))))))

@@ -14,7 +14,7 @@
             [fukan.cozo.law :as law]
             [fukan.cozo.query :as cq]))
 
-(def ^:private designs '[design.store design.checkout design.billing])
+(def ^:private designs '[design.store design.checkout design.billing design.front])
 
 (defonce ^:private loaded
   ;; The design is found on the project's own classpath when the project checks itself; here
@@ -24,7 +24,9 @@
 
 (defn- model []
   @loaded
-  (let [p ["reference/shop/src"]]
+  ;; the shop, and the request-handling library it uses — which the shop's own check finds on
+  ;; its classpath, and this one is handed as a second root
+  (let [p ["reference/shop/src" "reference/web/src"]]
     (build/model->cozo designs
                        {:planes {"code"   (:roots (tc/extract-roots p))
                                  "domain" (:roots (lx/extract-roots p))}})))
@@ -34,12 +36,12 @@
 (deftest every-law-holds-and-not-vacuously
   (let [db (model)]
     (is (= [] (law/check db)))
-    (testing "each of the ten designed operations is realized by a function"
-      (is (= 10 (count (q db '[:find ?o ?f :in $ %
+    (testing "each of the thirteen designed operations is realized by a function"
+      (is (= 13 (count (q db '[:find ?o ?f :in $ %
                                :where (is ?o :fukan.common.vocab.code.operation/Operation)
                                       (corresponds ?o ?f)])))))
     (testing "and each of those functions wrote a signature the dialect read"
-      (is (= 10 (count (q db '[:find ?f :in $ %
+      (is (= 13 (count (q db '[:find ?f :in $ %
                                :where (is ?o :fukan.common.vocab.code.operation/Operation)
                                       (corresponds ?o ?f) (signature ?f ?sig)]))))
       (is (= #{} (q db '[:find ?f :in $ % :where [?f :val/signature-unread true]]))))))
@@ -48,7 +50,7 @@
   (let [db (model)]
     (testing "the views, each under its whole name: two summaries, neither the other"
       (is (= #{"checkout/receipt" "checkout/placement" "checkout/summary" "checkout/price"
-               "billing/summary"}
+               "billing/summary" "front/visitor" "web/route" "web/caller"}
              (set (map first (q db '[:find ?n :in $ % :where (is ?v ::lx/View) [?v :entity/name ?n]])))))
       (is (= #{["shop.checkout" "summary" "order/total"] ["shop.checkout" "summary" "order/id"]
                ["shop.billing" "summary" "customer/id"] ["shop.billing" "summary" "customer/name"]
@@ -66,7 +68,33 @@
   (let [db (model)]
     (testing "how far the domain's words travel, by namespace"
       (is (= #{["shop.checkout" "order"] ["shop.checkout" "customer"] ["shop.checkout" "product"]
-               ["shop.billing" "order"] ["shop.billing" "customer"]}
+               ["shop.billing" "order"] ["shop.billing" "customer"]
+               ["shop.front" "login"] ["shop.front" "order"] ["shop.front" "customer"]}
              (lx/footprint db))))
     (testing "no function claims to know something nothing explains"
       (is (= #{} (lx/unread-claims db))))))
+
+(deftest a-system-speaks-more-than-one-language
+  (let [db (model)]
+    (testing "two vocabularies, each owning its shapes; the shop's draws on the shared one"
+      (is (= #{"shop" "web"}
+             (set (map first (q db '[:find ?n :in $ % :where (is ?v ::lx/Vocabulary) [?v :entity/name ?n]])))))
+      (is (= #{["shop" "customer"] ["shop" "login"] ["shop" "order"] ["shop" "line"]
+               ["shop" "product"] ["shop" "address"]
+               ["web" "web.request"] ["web" "web.session"]}
+             (q db '[:find ?vn ?sn :in $ % :where (declares-shape ?v ?s)
+                     [?v :entity/name ?vn] [?s :entity/name ?sn]])))
+      (is (= #{["shop" "web"]}
+             (q db '[:find ?an ?bn :in $ % :where (draws-on ?a ?b)
+                     [?a :entity/name ?an] [?b :entity/name ?bn]]))))
+    (testing "a reference crosses from one to the other, by the entity's one name"
+      (is (contains? (:references (lx/domain-map db)) ["login" "web.session"])))
+    (testing "which namespace speaks which language"
+      (is (= #{["shop.checkout" "shop"] ["shop.billing" "shop"]
+               ["shop.front" "shop"] ["shop.front" "web"]
+               ["web.routing" "web"]}
+             (lx/languages db))))
+    (testing "and the functions standing where the two meet are the front's, and only those"
+      (is (= {["shop.front" "customer"] #{"shop" "web"}
+              ["shop.front" "receipt"]  #{"shop" "web"}}
+             (lx/translators db))))))
