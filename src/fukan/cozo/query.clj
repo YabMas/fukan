@@ -120,9 +120,10 @@
       :else                           #{"t_int" "t_str" "t_bool"})))
 
 (defn- compile-datom
-  "A `[?e :attr ?v]` clause → `[fragment extra-rules refs]`. Single bucket (the overwhelming
-   majority) → direct stored-relation access, which is the whole point. Several → a per-attribute
-   union helper, named by attribute so it dedupes across clauses."
+  "A `[?e :attr ?v]` clause → `[fragment extra-rules refs call-args]`. Single bucket (the
+   overwhelming majority) → direct stored-relation access, which is the whole point. Several → a
+   per-attribute union helper, named by attribute so it dedupes across clauses, called with the
+   clause's subject and value (`call-args`, as `compile-clause` reports them)."
   [c]
   (let [a  (attr (nth c 1))
         e  (cterm (nth c 0))
@@ -133,7 +134,8 @@
       (let [hn (str "at_" (str/replace a #"[^A-Za-z0-9]" "_"))]
         [(str hn "[" e ", " v "]")
          (map #(str hn "[e, v] := *" % "[e, '" a "', v]") bs)
-         #{}]))))
+         #{}
+         [(nth c 0) (nth c 2)]]))))
 
 ;; ── synthetic rules: cozo ports of Clojure fn-predicates ──────────────────────
 ;; A `[(pred ?a ?b)]` clause whose `pred` is a Clojure fn (not a datalog rule) can't be a
@@ -262,7 +264,27 @@
   [form]
   (distinct (filter dvar? (tree-seq coll? seq form))))
 
-(defn- measure-clause? [c] (and (seq? c) (= 'measure (first c))))
+(defn- clause-kind
+  "What clause `c` IS, as the clause compiler reads it — the ONE classification `compile-clause`
+   dispatches on and every other reader of a clause asks, so none of them can read a clause as a
+   shape the compiler does not: `:datom` (`[?e :attr ?v]`), `:predicate` (`[(f …)]`, exactly one
+   call), `:not`, `:not-join`, `:or-join`, `:measure`, `:is`, `:call` (a rule call), or nil for a
+   form the compiler refuses."
+  [c]
+  (cond
+    (vector? c) (cond (and (= 3 (count c)) (keyword? (nth c 1))) :datom
+                      (and (= 1 (count c)) (seq? (first c)))     :predicate)
+    (and (seq? c) (symbol? (first c)))
+    (case (first c)
+      not :not, not-join :not-join, or-join :or-join, measure :measure, is :is
+      :call)))
+
+(defn- disjunct-clauses
+  "The clauses of one `or-join` disjunct: an `(and …)`'s, else the disjunct itself."
+  [d]
+  (if (and (seq? d) (= 'and (first d))) (rest d) [d]))
+
+(defn- measure-clause? [c] (= :measure (clause-kind c)))
 
 (defn- parse-measure
   "Validate `(measure ?out (agg ?v) body…)` → {:out :agg :avar :body}. Throws on malformed."
@@ -309,7 +331,7 @@
    wrapping a call. Distinguishes it from a datom clause `[?e :attr ?v]` and a rule call
    `(rule ?a ?b)`, neither of which is order-sensitive here."
   [c]
-  (and (vector? c) (= 1 (count c)) (seq? (first c))))
+  (= :predicate (clause-kind c)))
 
 (defn- literal-datom?
   "True for a datom clause whose VALUE is a literal — `[?r :rel/kind :calls]` — and for a sort pin
@@ -317,21 +339,21 @@
    genus). With the entity free that is a seek on the `(a, v)` index rather than a scan of the
    attribute, which is what `order-expansion` needs to know to open an unanchored body."
   [c]
-  (cond
-    (and (vector? c) (= 3 (count c)) (keyword? (nth c 1)))
-    (not (dvar? (nth c 2)))
-    (and (seq? c) (= 'is (first c)) (= 3 (count c)) (keyword? (nth c 2)))
-    (recur (structure/pin-clause (nth c 2) (nth c 1)))
-    :else false))
+  (case (clause-kind c)
+    :datom (not (dvar? (nth c 2)))
+    :is    (if (and (= 3 (count c)) (keyword? (nth c 2)))
+             (recur (structure/pin-clause (nth c 2) (nth c 1)))
+             false)
+    false))
 
-(defn- negation? [c] (and (seq? c) (contains? #{'not 'not-join} (first c))))
+(defn- negation? [c] (contains? #{:not :not-join} (clause-kind c)))
 
 (defn- visible-vars
   "The vars of `c` its SIBLINGS can see. A `not-join` exposes its join vars and nothing else — the
    rest are private to the helper rule it compiles to, and a sibling that happens to reuse one of
    their names shares nothing with it."
   [c]
-  (if (and (seq? c) (= 'not-join (first c)))
+  (if (= :not-join (clause-kind c))
     (filter dvar? (second c))
     (vars-of c)))
 
@@ -350,48 +372,49 @@
    inside a `not-join`: `inline-index` refuses those outright, so the two decisions agree instead
    of one silently standing in for the other."
   [c]
-  (and (seq? c) (symbol? (first c))
-       (not (#{'not 'not-join 'or-join 'is 'measure} (first c)))))
+  (= :call (clause-kind c)))
 
 (defn- compile-clause
-  "One datalog clause → `[cozo-fragment extra-rules refs]` (PURE): `extra-rules` are the not-join/
-   or-join helper definitions it spawns (uniquely named by content), `refs` the set of rule names it
-   CALLS (so the program emits just the reachable rules). Throws on an unsupported form."
+  "One datalog clause → `[cozo-fragment extra-rules refs call-args]` (PURE): `extra-rules` are the
+   not-join/or-join helper definitions it spawns (uniquely named by content), `refs` the set of rule
+   names it CALLS (so the program emits just the reachable rules), and `call-args` — present only
+   when the fragment IS a rule call, a `not`'s when what it negates is one — the datalog terms that
+   call passes, in order. Throws on an unsupported form."
   [c]
-  (cond
-    (and (vector? c) (= 3 (count c)) (keyword? (nth c 1)))
+  (case (clause-kind c)
+    :datom
     (compile-datom c)
-    (and (vector? c) (= 1 (count c)) (seq? (first c)))
+    :predicate
     (let [[frag refs] (compile-predicate (first c))] [frag nil refs])
-    (and (seq? c) (= 'not (first c)) (= 2 (count c)))     ; (not <single-clause>)
-    (let [[frag extra refs] (compile-clause (second c))] [(str "not " frag) extra refs])
-    (and (seq? c) (= 'not (first c)))                     ; (not c1 c2 …) — use (not-join […] …)
-    (throw (ex-info (str "multi-clause `not` is unsupported — write it as `not-join`: " (pr-str c)) {:clause c}))
-    (and (seq? c) (= 'not-join (first c)))
+    :not
+    (if (= 2 (count c))                                   ; (not <single-clause>)
+      (let [[frag extra refs args] (compile-clause (second c))] [(str "not " frag) extra refs args])
+      ;; (not c1 c2 …) — use (not-join […] …)
+      (throw (ex-info (str "multi-clause `not` is unsupported — write it as `not-join`: " (pr-str c)) {:clause c})))
+    :not-join
     (let [[_ vars & clauses] c
           hn (helper-name "nj_" c)
           vs (str/join ", " (map cvar vars))
           [body extra refs] (compile-clauses clauses)]
-      [(str "not " hn "[" vs "]") (cons (str hn "[" vs "] := " body) extra) refs])
-    (and (seq? c) (= 'or-join (first c)))
+      [(str "not " hn "[" vs "]") (cons (str hn "[" vs "] := " body) extra) refs vars])
+    :or-join
     (let [[_ vars & disjuncts] c
           hn (helper-name "oj_" c)
           vs (str/join ", " (map cvar vars))
-          parts (map (fn [d]
-                       (compile-clauses (if (and (seq? d) (= 'and (first d))) (rest d) [d])))
-                     disjuncts)]
+          parts (map (comp compile-clauses disjunct-clauses) disjuncts)]
       [(str hn "[" vs "]")
        (concat (map (fn [[body _ _]] (str hn "[" vs "] := " body)) parts)
                (mapcat second parts))
-       (reduce into #{} (map #(nth % 2) parts))])
-    (and (seq? c) (= 'measure (first c)))
+       (reduce into #{} (map #(nth % 2) parts))
+       vars])
+    :measure
     (throw (ex-info (str "(measure …) is not supported inside not-join/or-join — lift it to the top level: "
                          (pr-str c)) {:clause c}))
     ;; (is ?v <qualified-tag>) — the ns-precise sort pin. Declaration forms resolve the sort
     ;; SYMBOL to its tag at parse (structure/resolve-sorts); here the resolved tag LOWERS
     ;; through the algebra, which owns how a sort is pinned (`structure/pin-clause`). Recursion
     ;; through not/not-join/or-join bodies comes free.
-    (and (seq? c) (= 'is (first c)))
+    :is
     (let [[_ v tag] c]
       (when-not (and (= 3 (count c)) (keyword? tag))
         (throw (ex-info (str "(is ?var <qualified-tag>) — a bare sort symbol resolves only in a "
@@ -404,10 +427,9 @@
           (throw (ex-info (str "(is …): " tag " is a relation element, not a sort: " (pr-str c))
                           {:clause c :tag tag})))
         (compile-clause (structure/pin-clause tag v))))
-    (and (seq? c) (symbol? (first c)))
+    :call
     (let [nm (rname (first c))]
-      [(str nm "[" (str/join ", " (map cterm (rest c))) "]") nil #{nm}])
-    :else
+      [(str nm "[" (str/join ", " (map cterm (rest c))) "]") nil #{nm} (rest c)])
     (throw (ex-info (str "unsupported clause: " (pr-str c)) {:clause c}))))
 
 (defn- compile-clauses
@@ -443,12 +465,14 @@
   48)
 
 (defn- subst-form
-  "Simultaneous variable substitution through `form` (one walk, so a var never re-substitutes)."
+  "Simultaneous variable substitution through `form` (one walk, so a var never re-substitutes).
+   A form's metadata is kept: it is how a refusal knows which written clause an expansion came
+   from (`mark`)."
   [form m]
   (cond
     (and (symbol? form) (contains? m form)) (m form)
-    (vector? form) (mapv #(subst-form % m) form)
-    (seq? form)    (apply list (map #(subst-form % m) form))
+    (vector? form) (cond-> (mapv #(subst-form % m) form) (meta form) (with-meta (meta form)))
+    (seq? form)    (cond-> (apply list (map #(subst-form % m) form)) (meta form) (with-meta (meta form)))
     :else          form))
 
 (defn- filtered-generator?
@@ -597,6 +621,16 @@
               (recur (vec more) (into bound (mapcat bound-by cs*)) n* (into out cs*)))
             (recur (vec more) (into bound (bound-by c)) n (conj out c))))))))
 
+(defn- rule-as-compiled
+  "The body `compile-rule` compiles for `rule` — its measures lifted (`expand-measures`), its rule
+   calls inlined by `inl`, the result oriented against the head — as `{:body clauses :aux rules}`,
+   `:aux` the lifted measure rules, each compiled as a rule in turn."
+  [[head & body] inl]
+  (let [head-vars   (filter dvar? (rest head))
+        [body* aux] (expand-measures head-vars body)
+        body*       (cond-> body* inl (inline-clauses inl))]
+    {:body (order-expansion body* #{} (set head-vars)) :aux aux}))
+
 (defn- compile-rule
   "A datalog rule `[(head args…) body…]` → `[def-lines refs]`: the head line, any not-join/
    or-join helpers, and any lifted-measure aux rules its body spawned (compiled recursively —
@@ -618,11 +652,8 @@
    the front of its body removes the restriction: doing that globally took fukan's own 93 laws
    from 0.87s to 236s."
   ([rule] (compile-rule rule nil))
-  ([[head & body] inl]
-  (let [head-vars            (filter dvar? (rest head))
-        [body* aux]          (expand-measures head-vars body)
-        body*                (cond-> body* inl (inline-clauses inl))
-        body*                (order-expansion body* #{} (set head-vars))
+  ([[head :as rule] inl]
+  (let [{body* :body aux :aux} (rule-as-compiled rule inl)
         [bodystr extra refs] (compile-clauses body*)
         [aux-lines aux-refs] (reduce (fn [[ls rs] r]
                                        (let [[l rf] (compile-rule (dewild r) inl)]
@@ -645,14 +676,16 @@
                           nm           (rname (ffirst rule))]
                       (-> idx
                           (update-in [nm :lines] (fnil into []) lines)
-                          (update-in [nm :refs] (fnil into #{}) refs)))
+                          (update-in [nm :refs] (fnil into #{}) refs)
+                          (update ::kept conj rule)))
                     (catch clojure.lang.ExceptionInfo _ idx)))
-                @synthetic-rules rules)
+                (assoc @synthetic-rules ::kept []) rules)
         ;; carried on the index so `compile-body` reaches them without a signature change; the keys
         ;; are keywords and rule names are strings, so neither can shadow a rule. `::rules` is the
         ;; raw rule FORMS — a scope with its own `%` rules rebuilds the inline index over the
         ;; MERGED set, which is the only way to tell a caller's redefinition from the same rule
-        ;; simply being passed through again.
+        ;; simply being passed through again. `::kept` is the definitions that COMPILED — the only
+        ;; vocabulary bodies a program can hold, which is what a reader of a refusal walks.
         (assoc ::inline inl ::rules rules))))
 
 (def ^:private vocab-index-cache
@@ -704,22 +737,18 @@
               (= '_ x)    [(symbol (str "?_w" n)) (inc n)]
               (vector? x) (let [[items n'] (reduce (fn [[acc n] e] (let [[e' n'] (go e n)] [(conj acc e') n']))
                                                    [[] n] x)]
-                            [items n'])
+                            [(cond-> items (meta x) (with-meta (meta x))) n'])
               (seq? x)    (let [[items n'] (reduce (fn [[acc n] e] (let [[e' n'] (go e n)] [(conj acc e') n']))
                                                    [[] n] x)]
-                            [(apply list items) n'])
+                            [(cond-> (apply list items) (meta x) (with-meta (meta x))) n'])
               :else       [x n]))]
     (first (go form 0))))
 
 
-(defn ^{:malli/schema [:=> [:cat :any :any :any :any] :any]}
-  compile-body
-  "Compile `where` (a seq of clauses) + caller-supplied `extra-rules` (datalog rules) into
-   `[rule-lines body-str]`: the vocab rules in the reference closure, then the extra rules,
-   then any not-join/or-join helpers (deduped), and the joined where body. Shared by the
-   law engine (`compile-law`) and `q`. PURE — `_` wildcards are expanded (per scope) first,
-   then top-level `(measure …)` clauses are lifted to aux rules (`expand-measures`), with
-   `outer-vars` (find vars / law offenders) counting toward grouping inference."
+(defn- body-as-compiled
+  "The where `compile-body` compiles, with the rules it compiles beside it and the inline index it
+   compiles them under: `where` with its `_` made variables (`dewild`), its measures lifted to
+   rules joining `extra-rules`, and its rule calls inlined — `{:where :rules :inline}`."
   [where extra-rules index outer-vars]
   (let [where               (dewild where)
         [where* aux]        (expand-measures outer-vars where)
@@ -733,7 +762,19 @@
         inl                 (if-let [vr (::rules index)]
                               (inline-index (distinct (concat extra-rules vr)))
                               (::inline index))
-        where*              (cond-> where* (seq inl) (inline-clauses inl))
+        where*              (cond-> where* (seq inl) (inline-clauses inl))]
+    {:where where* :rules extra-rules :inline inl}))
+
+(defn ^{:malli/schema [:=> [:cat :any :any :any :any] :any]}
+  compile-body
+  "Compile `where` (a seq of clauses) + caller-supplied `extra-rules` (datalog rules) into
+   `[rule-lines body-str]`: the vocab rules in the reference closure, then the extra rules,
+   then any not-join/or-join helpers (deduped), and the joined where body. Shared by the
+   law engine (`compile-law`) and `q`. PURE — `_` wildcards are expanded (per scope) first,
+   then top-level `(measure …)` clauses are lifted to aux rules (`expand-measures`), with
+   `outer-vars` (find vars / law offenders) counting toward grouping inference."
+  [where extra-rules index outer-vars]
+  (let [{where* :where extra-rules :rules inl :inline} (body-as-compiled where extra-rules index outer-vars)
         [rule-lines erefs]  (reduce (fn [[lines refs] r]
                                       (let [[l rf] (compile-rule (dewild r) inl)]
                                         [(into lines l) (into refs rf)]))
@@ -821,64 +862,144 @@
   [cdb v] (if (lookup-ref? v) (resolve-lookup cdb v) v))
 
 ;; ── an engine refusal, as a sentence ───────────────────────────────────────────
-;; Attribution reads the clauses `q` COMPILED — its where after the query's inputs were substituted
-;; in — because that is what the engine refused: an input changes which rule a `path` calls and
-;; which variables a negation still has. What is SHOWN is the clause as its author wrote it, looked
-;; up through `as-written`.
+;; Attribution reads the bodies `q` COMPILED — its where after the query's inputs were substituted
+;; in, its paths expanded and its rule calls inlined, each rule the program emits — because that is
+;; what the engine refused: an input changes which rule a `path` calls and which variables a
+;; negation still has, and an inlined rule's negation is judged among its caller's clauses. What is
+;; SHOWN is the clause its author wrote. Each clause OCCURRENCE carries that on its metadata
+;; (`mark`), put there positionally before any of it is compiled — never looked up by value, so a
+;; literal that equals a clause, or two clauses that compile alike, cannot take another's source.
 
-(defn- as-written
-  "`{compiled-form written-form}` for every sub-form of `compiled`, the where-clauses `written`
-   after input substitution. Substitution replaces leaves only, so the two are walked in step; a
-   written variable an input replaced with a collection is a leaf here and is not descended into."
-  [written compiled]
-  (if (and (sequential? written) (sequential? compiled) (= (count written) (count compiled)))
-    (into {compiled written} (mapcat as-written written compiled))
-    {compiled written}))
+(defn- sub-clauses
+  "The clauses written inside clause `c`, as the clause compiler reads them — a `not`'s, a
+   `not-join`'s after its join vars, each `or-join` disjunct (an `and`'s clauses), a `measure`'s
+   body. Nothing else in a clause is a clause: a triple, a predicate, a rule call's arguments and
+   any value an input put there are terms."
+  [c]
+  (case (clause-kind c)
+    :not      (rest c)
+    :not-join (drop 2 c)
+    :or-join  (mapcat disjunct-clauses (drop 2 c))
+    :measure  (drop 3 c)
+    nil))
+
+(defn- rebuild
+  "`c` with its `sub-clauses` replaced, in order, by `subs` (its metadata kept). An `or-join`'s
+   `and` disjunct takes as many as it held."
+  [c subs]
+  (if (empty? (sub-clauses c))
+    c
+    (with-meta
+      (case (clause-kind c)
+        :not      (apply list 'not subs)
+        :not-join (apply list (concat (take 2 c) subs))
+        :measure  (apply list (concat (take 3 c) subs))
+        :or-join  (apply list (concat (take 2 c)
+                                     (first (reduce (fn [[out subs] d]
+                                                      (if (not= [d] (disjunct-clauses d))
+                                                        (let [k (count (disjunct-clauses d))]
+                                                          [(conj out (with-meta (apply list 'and (take k subs)) (meta d)))
+                                                           (drop k subs)])
+                                                        [(conj out (first subs)) (rest subs)]))
+                                                    [[] subs] (drop 2 c))))))
+      (meta c))))
+
+(defn- mark
+  "`c` with every clause occurrence in it — itself and its `sub-clauses` at any depth — carrying
+   `::written` and `::source`: the clause at the same position of `w`, as its author wrote it, and
+   of `s`, after inputs were substituted. Where `c` is not shaped like them (a `path` expanded into
+   other clauses) every occurrence in it carries `w` and `s` themselves."
+  [c w s]
+  (let [cs (sub-clauses c), ws (sub-clauses w), ss (sub-clauses s)
+        subs (if (= (count cs) (count ws) (count ss)) (map mark cs ws ss) (map #(mark % w s) cs))]
+    (vary-meta (rebuild c subs) assoc ::written w ::source s)))
+
+(defn- mark-rule
+  "A rule whose body clauses each carry themselves as written and as source."
+  [[head & body]]
+  (into [head] (map #(mark % % %)) body))
+
+(defn- written-of [c] (get (meta c) ::written c))
+(defn- source-of [c] (get (meta c) ::source c))
 
 (defn- clause-refs
-  "The rule names the engine is handed for the clause `c` — read off the clause compiler itself
-   (`compile-clause`'s `refs`), after `expand` rewrites it the way the compiler's caller does, so
-   whatever a clause expands or compiles into is matched by construction. A `measure` calls what
-   its body calls: the compiler lifts that body into a rule of its own before compiling it. A form
-   the compiler refuses calls nothing."
-  [expand c]
-  (if (and (seq? c) (= 'measure (first c)))
-    (into #{} (mapcat #(clause-refs vec %)) (drop 3 c))
-    (try (nth (compile-clauses (dewild (expand [c]))) 2)
-         (catch clojure.lang.ExceptionInfo _ #{}))))
+  "The rule names the engine is handed for the compiled clause `c` — read off the clause compiler
+   itself (`compile-clause`'s `refs`). A form the compiler refuses calls nothing."
+  [c]
+  (try (nth (compile-clauses (dewild [c])) 2)
+       (catch clojure.lang.ExceptionInfo _ #{})))
+
+(defn- rule-scopes
+  "The bodies compiling `rule` under `inl` hands the engine — its own, as `compile-rule` compiles
+   it, and those of the measure rules lifted out of it, compiled as `compile-rule` compiles them."
+  [rule inl]
+  (let [{:keys [body aux]} (rule-as-compiled rule inl)]
+    (cons body (mapcat #(rule-scopes (dewild %) inl) aux))))
 
 (defn- compiled-scopes
-  "Every body `compile-body` compiles for a query whose substituted where-clauses are `where` and
-   whose `%` rules are `rules`, as `{:body clauses :expand f}`: the where itself — whose top-level
-   clauses `q` expands with `structure/expand-clauses` before compiling — the body of every
-   supplied rule, and the body of every vocab rule a call reaches from those (compiled as
-   written). A rule's head is left out: it is not a call, and its variables are what the body has
-   to bind."
-  [where rules]
-  (let [by-name (group-by #(rname (ffirst %)) (structure/vocab-rules))
-        calls   (fn [{:keys [body expand]}] (into #{} (mapcat #(clause-refs expand %)) body))
-        rule    (fn [r] {:body (rest r) :expand vec})]
-    (loop [scopes (into [{:body where :expand structure/expand-clauses}] (map rule) rules)
+  "Every body the program for a query compiles, derived through the compiler's OWN steps, so a name
+   it generates — a `path`'s intermediate variable, a `_` made a variable, an inlined rule's
+   renamed interior — is the name the engine was handed: the where — `written` as authored,
+   `substituted` once its inputs were put in — expanded whole by `structure/expand-clauses` as `q`
+   expands it, then made into the body `compile-body` compiles (`body-as-compiled`) with `outer`
+   the query's find vars; every rule that compiles beside it — the `%` `rules` and the lifted
+   measures — as `compile-rule` compiles it; and every vocabulary rule a call in those reaches, as
+   the vocabulary index compiles it — of `kept`, the definitions that index compiled, and no
+   other: one it skipped is in no program. A rule only ever inlined is no body the engine sees.
+
+   Each clause is `mark`ed with what was written before any of that runs; a `path` expands into
+   clauses that carry the path clause's marks. The expansion of the whole where is split back into
+   the clauses it came from by the length each expands to alone — the same clauses, under names
+   indexed by position."
+  [written substituted rules outer kept]
+  (let [vocab    (map mark-rule (structure/vocab-rules))
+        index    {::rules vocab ::inline (inline-index vocab)}
+        by-name  (group-by #(rname (ffirst %)) (map mark-rule kept))
+        calls    (fn [body] (into #{} (mapcat clause-refs) body))
+        expanded (structure/expand-clauses (vec substituted))
+        where    (loop [[w & ws] written, [s & ss] substituted, out (seq expanded), acc []]
+                   (if (nil? s)
+                     acc
+                     (let [k (count (structure/expand-clauses [s]))]
+                       (recur ws ss (drop k out) (into acc (map #(mark % w s)) (take k out))))))
+        {where :where rules :rules inl :inline} (body-as-compiled where (map mark-rule rules) index outer)]
+    (loop [scopes (into [where] (mapcat #(rule-scopes (dewild %) inl)) rules)
            seen   #{}
            todo   (vec (mapcat calls scopes))]
       (if-let [n (peek todo)]
         (let [todo (pop todo)]
           (if (seen n)
             (recur scopes seen todo)
-            (let [more (map rule (by-name n))]
+            (let [more (mapcat #(rule-scopes % (::inline index)) (by-name n))]
               (recur (into scopes more) (conj seen n) (into todo (mapcat calls more))))))
-        (distinct scopes)))))
+        scopes))))
+
+(defn- clause-terms
+  "The terms clause `c` holds where the clause compiler reads a TERM — a triple's positions, a
+   predicate's or a rule call's arguments, a join-var list, a measure's out and aggregate vars —
+   and, through `sub-clauses`, those of every clause written inside it. A collection in a term
+   position is ONE term: the compiler writes it as a quoted value, so nothing inside it is a
+   variable or a wildcard."
+  [c]
+  (case (clause-kind c)
+    :datom                 c
+    :predicate             (rest (first c))
+    :measure               (concat [(second c) (second (nth c 2))] (mapcat clause-terms (sub-clauses c)))
+    :not                   (mapcat clause-terms (sub-clauses c))
+    (:not-join :or-join)   (concat (second c) (mapcat clause-terms (sub-clauses c)))
+    (:is :call)            (rest c)
+    ()))
 
 (defn- calling-clauses
-  "The innermost clauses of `scope` that call the rule named `missing`: every clause at any depth
-   whose compiled refs hold it, less one that does only because a clause inside it does."
-  [{:keys [body expand]} missing]
-  (let [hits (fn hits [expand c]
-               (when (coll? c)
-                 (let [inner (mapcat #(hits vec %) c)]
-                   (cond (seq inner)                              inner
-                         ((clause-refs expand c) missing)         [c]))))]
-    (mapcat #(hits expand %) body)))
+  "The innermost clauses of the compiled `body` that call the rule named `missing`: every clause
+   at any depth whose compiled refs hold it, less one that does only because a clause inside it
+   does."
+  [body missing]
+  (let [hits (fn hits [c]
+               (let [inner (mapcat hits (sub-clauses c))]
+                 (cond (seq inner)              inner
+                       ((clause-refs c) missing) [c])))]
+    (mapcat hits body)))
 
 (defn- called-name
   "The name the author of `call` wrote for the rule the engine knows as `missing`: the clause's
@@ -899,40 +1020,43 @@
 
 (defn- negation-scopes
   "`body` and every helper body the clause compiler spawns inside it — a `not-join`'s clauses, each
-   `or-join` disjunct, a `measure`'s body — each its own scope, as the helper rule it compiles to
-   is: what binds a variable in one says nothing about another."
+   `or-join` disjunct — each its own scope, as the helper rule it compiles to is: what binds a
+   variable in one says nothing about another. (A measure is no clause of a compiled body: it was
+   lifted into a rule, which `compiled-scopes` gives as a scope of its own.)"
   [body]
   (cons body
         (mapcat (fn [c]
-                  (when (seq? c)
-                    (case (first c)
-                      not-join (negation-scopes (drop 2 c))
-                      or-join  (mapcat #(negation-scopes (if (and (seq? %) (= 'and (first %))) (rest %) [%]))
-                                       (drop 2 c))
-                      measure  (negation-scopes (drop 3 c))
-                      not      (rest (negation-scopes (rest c)))
-                      nil)))
+                  (case (clause-kind c)
+                    :not-join            (negation-scopes (sub-clauses c))
+                    :or-join             (mapcat (comp negation-scopes disjunct-clauses) (drop 2 c))
+                    :not                 (rest (negation-scopes (sub-clauses c)))
+                    nil))
                 body)))
+
+(defn- plain-refusal
+  "The engine's refusal `data` as plain text: its code, its message and its help, and nothing of
+   the script it reported against. What every refusal says at the least."
+  [{:keys [code message help]}]
+  (str "The engine refused this query (" code "): " message (when help (str ". " help))))
 
 (defn- refusal
   "The engine's refusal `data` (the ex-data cozo throws: `:code`, `:message`, `:help`) of a query,
-   as one plain-text sentence. `scopes` are the bodies the query compiled to (`compiled-scopes`);
-   `written` gives, for a clause of them, the clause its author wrote (`as-written`).
+   as one plain-text sentence. `scopes` are the bodies the query compiled to (`compiled-scopes`),
+   each clause of them carrying the clause its author wrote (`mark`).
 
    The engine reports against the script this compiler generated, which the author of a clause
    never sees, so the two refusals an author can act on are restated in terms of what they
    wrote: a call to a rule that does not exist names the calling clause, and an unsafe negation
    names the negation nothing binds. Any other refusal carries the engine's own message. No span of
    generated script and no terminal escape survives into it."
-  [scopes written {:keys [code message help]}]
+  [scopes {:keys [code message] :as data}]
   (let [said    (fn [& parts] (str "The engine refused this query (" code "): " (apply str parts)))
-        written #(get written % %)
-        quoted  #(str/join ", " (distinct (map (comp pr-str written) %)))]
+        quoted  #(str/join ", " (distinct (map (comp pr-str written-of) %)))]
     (case code
       "eval::rule_not_found"
       (let [missing (second (re-find #"rule (\S+)" (str message)))
-            calls   (distinct (mapcat #(calling-clauses % missing) scopes))
-            names   (distinct (map #(called-name % missing) calls))]
+            calls   (mapcat #(calling-clauses % missing) scopes)
+            names   (distinct (map #(called-name (source-of %) missing) calls))]
         (if (empty? calls)
           (said message ".")
           (said (quoted calls) " calls a rule named `" (str/join "`, `" names)
@@ -941,32 +1065,45 @@
                   " Alternatives are written `(or-join [?vars] clause clause …)`."))))
 
       "eval::unsafe_negation"
-      ;; The engine says only that some negation is unsafe. Which one is read off the query, scope
-      ;; by scope — a helper body is judged against its own clauses, as the rule it compiles to is:
-      ;; a negation none of whose variables a positive clause BESIDE IT mentions has nothing to be
-      ;; safe against. One a query input was substituted into holds a value and is safe by that,
-      ;; so it is never a candidate; nor is one of literals alone, which needs nothing bound. One
-      ;; holding only `_` IS a candidate: a wildcard is a variable nothing binds, and the engine
-      ;; refuses it. This names the culprit after a refusal and decides nothing — when it singles
-      ;; none out, every candidate is named rather than a wrong one.
-      (let [needs   (fn [n] (set (if (= 'not-join (first n)) (filter dvar? (second n)) (vars-of n))))
+      ;; The engine says only that some negation is unsafe. Which one is read off the compiled
+      ;; bodies, scope by scope — a helper body is judged against its own clauses, as the rule it
+      ;; compiles to is — by the rule the engine was measured to apply: a negated RULE CALL is
+      ;; refused when none of its arguments is a value and none is a variable a positive clause
+      ;; beside it binds. So a negation is a candidate only where it compiles to a rule call, with
+      ;; that call's arguments — read off the clause compiler itself (`compile-clause`'s
+      ;; `call-args`), never off the clause's kind: a `not-join` or an `or-join` calls its helper, a
+      ;; triple calls an attribute's union helper when the attribute spans buckets and otherwise reads
+      ;; a stored relation, which is never refused. A value among the arguments makes it safe
+      ;; whether an input put it there or its author wrote it, and a `_` is a variable nothing
+      ;; binds. Variables are compared as the engine sees them (`cvar`: `?a-b` and `?a_b` are one).
+      ;; This names the culprit after a refusal and decides nothing — when it singles none out,
+      ;; every candidate is named rather than a wrong one. A variable is reported by the name its
+      ;; author wrote: terms are paired by position with the written clause's, since inlining
+      ;; renames a rule's interior variables and a `_` reaches the engine as a fresh variable.
+      (let [pairs   (fn [n] (let [ct (clause-terms n), wt (clause-terms (written-of n))]
+                              (when (= (count ct) (count wt)) (map vector ct wt))))
+            args    (fn [n] (try (nth (compile-clause n) 3 nil)
+                              (catch clojure.lang.ExceptionInfo _ nil)))
             binds   (fn [c] (cond (negation? c)                        ()
-                                  (and (seq? c) (= 'or-join (first c))) (filter dvar? (second c))
-                                  :else                                (vars-of c)))
-            judged  (for [scope (mapcat (comp negation-scopes :body) scopes)
-                          :let [bound (set (mapcat binds scope))]
+                                  (= :or-join (clause-kind c))          (filter dvar? (second c))
+                                  :else                                (filter dvar? (clause-terms c))))
+            judged  (for [scope (mapcat negation-scopes scopes)
+                          :let [bound (into #{} (map cvar) (mapcat binds scope))]
                           n scope
-                          :when (and (negation? n) (= n (written n)))
-                          :let [need (remove #{'_} (needs n))
-                                wild (some #{'_} (tree-seq coll? seq n))]
-                          :when (or (seq need) wild)]
+                          :when (negation? n)
+                          :let [terms (args n)]
+                          :when (seq terms)
+                          :let [vars  (filter #(or (dvar? %) (= '_ %)) terms)
+                                wild? (into #{'_} (keep (fn [[c w]] (when (= '_ w) c))) (pairs n))
+                                as    (into {} (filter #(every? dvar? %)) (pairs n))]]
                       {:negation n
-                       :unbound  (remove bound need)
-                       :culprit? (not-any? bound need)})
+                       :unbound  (map #(get as % %) (remove #(or (wild? %) (bound (cvar %))) vars))
+                       :culprit? (and (= (count vars) (count terms))
+                                      (not-any? #(and (not= '_ %) (bound (cvar %))) vars))})
             culprits (filter :culprit? judged)
             named    (if (seq culprits) culprits judged)
             vars     (sort (distinct (mapcat :unbound named)))
-            named    (distinct (map :negation named))]
+            named    (map :negation named)]
         (said "a negation is only safe once a positive clause binds its variables"
               (when (seq named) (str ", and nothing binds those of " (quoted named)))
               ". Write a positive clause that binds "
@@ -974,19 +1111,26 @@
               " before negating."
               (when (empty? vars) " A `_` binds nothing: a negation needs a variable a positive clause binds.")))
 
-      (said message (when help (str ". " help))))))
+      (plain-refusal data))))
 
 (defn- run
   "Run the compiled `program` for the query whose where-clauses are `where` as written and
-   `substituted` once its inputs were put in, and whose `%` rules are `rules`. An engine refusal
-   is rethrown as its `refusal` sentence — attributed against every body the query compiled to,
-   worded in the clauses as written — with the engine's `:code` and `:message` kept as data."
-  [db program where substituted rules]
+   `substituted` once its inputs were put in, whose `%` rules are `rules`, whose find vars are
+   `outer`, and whose vocabulary index kept the definitions `kept`. An engine refusal is rethrown
+   as its `refusal` sentence — attributed against every body the query compiled to, compiled
+   against the attribute buckets `q` compiled it against, worded in the clauses as written — with
+   the engine's `:code` and `:message` kept as data.
+
+   Naming a clause is best effort and the sentence is not: whatever attribution throws, the
+   refusal is still rethrown as plain text carrying the engine's code and its own message."
+  [db program where substituted rules outer kept]
   (try (db/q db program)
        (catch clojure.lang.ExceptionInfo e
          (let [data (ex-data e)]
            (if (:code data)
-             (throw (ex-info (refusal (compiled-scopes substituted rules) (as-written where substituted) data)
+             (throw (ex-info (try (binding [*attr-buckets* (buckets-of db)]
+                                    (refusal (compiled-scopes where substituted rules outer kept) data))
+                                  (catch Throwable _ (plain-refusal data)))
                              {:code (:code data) :engine-message (:message data)}))
              (throw e))))))
 
@@ -1010,11 +1154,13 @@
         ;; corrupt its head (e.g. a shared name like `?op`), so the rules are passed verbatim.
         substituted (walk/postwalk-replace subst where)
         where*  (structure/expand-clauses substituted)
-        [rule-lines body] (binding [*attr-buckets* (buckets-of db)]
-                            (compile-body where* (vec rules) (vocab-index) (find-vars find)))
+        [rule-lines body kept]
+        (binding [*attr-buckets* (buckets-of db)]
+          (let [index (vocab-index)]
+            (conj (compile-body where* (vec rules) index (find-vars find)) (::kept index))))
         head    (str/join ", " (map cvar (find-vars find)))
         program (str (str/join "\n" rule-lines) "\n?[" head "] := " body)
-        rows    (run db program where substituted rules)]
+        rows    (run db program where substituted rules (find-vars find) kept)]
     (if (collection-find? find)
       (vec (distinct (map first rows)))
       (set rows))))
