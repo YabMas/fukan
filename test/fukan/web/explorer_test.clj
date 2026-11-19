@@ -6,6 +6,7 @@
    namespace's own: parsing, the four alternatives of an answer, and that the model is read
    through the function it was handed at the moment of each request."
   (:require [cheshire.core :as json]
+            [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.structure :refer [defstructure]]
             [fukan.cozo.build :as build]
@@ -28,7 +29,7 @@
 (def ^:private high-id (str (ns-name *ns*) "/high"))
 
 (deftest a-well-formed-request-parses-to-a-spec-and-open-paths
-  (is (= [:view {:nest ["xholds"] :link ["xfaces"]} #{[high-id]}]
+  (is (= [:view {:nest ["xholds"] :link ["xfaces"]} #{[high-id]} "light"]
          (explorer/parse-request (db) {"nest" "xholds"
                                        "link" " xfaces ,"
                                        "open" (json/generate-string [[high-id]])})))
@@ -36,6 +37,13 @@
     (is (= high-id (:root (spec {"root" high-id}))))
     (is (true? (:unplaced (spec {"unplaced" "1"}))))
     (is (= '[(XShelf ?n)] (:select (spec {"select" "[(XShelf ?n)]"}))))))
+
+(deftest a-palette-is-parsed-with-the-request
+  (let [parsed (fn [params] (explorer/parse-request (db) (assoc params "nest" "xholds")))]
+    (is (= "light" (peek (parsed {}))) "light when the request names none")
+    (is (= "dark" (peek (parsed {"theme" "dark"}))))
+    (is (= :rejected (first (parsed {"theme" "sepia"}))))
+    (is (re-find #"theme.*sepia" (second (parsed {"theme" "sepia"}))))))
 
 (deftest a-malformed-request-is-rejected-with-what-was-wrong
   (let [rejected (fn [params]
@@ -47,7 +55,11 @@
     (is (re-find #"open" (rejected {"nest" "xholds" "open" "{\"not\":\"paths\"}"})))
     (is (re-find #"open" (rejected {"nest" "xholds" "open" "[[1,2]]"})))
     (is (re-find #"select" (rejected {"nest" "xholds" "select" "(XShelf ?n"})))
-    (is (re-find #"select" (rejected {"nest" "xholds" "select" "42"})))))
+    (is (re-find #"select" (rejected {"nest" "xholds" "select" "42"})))
+    (testing "a parameter PRESENT with no value is refused, not read as absent"
+      (doseq [p ["select" "open" "root" "unplaced" "theme" "link"]]
+        (is (re-find (re-pattern p) (str (rejected {"nest" "xholds" p ""}))) p))
+      (is (re-find #"unplaced" (str (rejected {"nest" "xholds" "unplaced" "yes"})))))))
 
 (deftest every-outcome-is-exactly-one-answer
   (testing "a graph"
@@ -64,6 +76,64 @@
       (is (string? reason))))
   (testing "no model"
     (is (= [:no-model] (:answer (explorer/answer (constantly nil) {"nest" "xholds"}))))))
+
+(deftest a-drawing-request-is-a-graph-request-answered-as-a-picture
+  (testing "the drawing of the graph the same parameters are answered with"
+    (let [params        {"nest" "xholds" "link" "xfaces" "open" (json/generate-string [[high-id]])}
+          [_ graph]     (:answer (explorer/answer db params))
+          {:keys [at answer]} (explorer/drawing db params)
+          [tag shown]   answer]
+      (is (string? at))
+      (is (= :drawing tag))
+      (is (= (count (:nodes graph)) (:nodes shown)))
+      (is (= (:unplaced graph) (:unplaced shown)))
+      (is (re-find #"^<svg " (:svg shown)))
+      (doseq [{:keys [label]} (:nodes graph)]
+        (is (re-find (re-pattern (str ">" label "<")) (:svg shown))))))
+  (testing "in the palette the request names"
+    (let [svg (fn [theme] (:svg (second (:answer (explorer/drawing db {"nest" "xholds" "theme" theme})))))]
+      (is (not= (svg "light") (svg "dark")))))
+  (testing "refused exactly as the graph request is"
+    (doseq [params [{"nest" "nope"}
+                    {"nest" "xholds" "theme" "sepia"}
+                    {"nest" "xholds" "select" "[(no-such-rule ?n)]"}]]
+      (is (= (:answer (explorer/answer db params)) (:answer (explorer/drawing db params)))))
+    (is (= [:no-model] (:answer (explorer/drawing (constantly nil) {"nest" "xholds"}))))))
+
+(deftest an-address-reads-back-as-the-parameters-it-was-written-from
+  (let [server (explorer/start 0 db)
+        seen   (fn [params]
+                 ;; what the transport hands a reading: a rejection names the parameter it read
+                 (json/parse-string
+                  (slurp (str "http://localhost:" (http/server-port server) "/api/graph?" (explorer/address params)))
+                  true))]
+    (try
+      (testing "every encoding a view parameter takes survives the trip"
+        (let [params {"nest"   "xholds"
+                      "link"   "xfaces"
+                      "select" "[(or-join [?n] (XShelf ?n) [?n :entity/name \"a b&c=d+e\"])]"
+                      "open"   (json/generate-string [[high-id]])
+                      "root"   high-id
+                      "unplaced" "1"}
+              [tag graph] (:answer (seen params))]
+          (is (= "graph" tag))
+          (is (= (second (:answer (explorer/answer db params)))
+                 (json/parse-string (json/generate-string graph) true)
+                 graph))))
+      (testing "a value is read back as it was written, not as something like it"
+        (is (re-find #"a b&c=d\+e%" (second (:answer (seen {"nest" "a b&c=d+e%"}))))))
+      (testing "one request has one address"
+        (is (= (explorer/address (array-map "nest" "a" "link" "b"))
+               (explorer/address (array-map "link" "b" "nest" "a")))))
+      (finally (explorer/stop server)))))
+
+(deftest a-query-string-that-is-not-percent-encoding-reaches-no-reading
+  (let [server (explorer/start 0 db)]
+    (try
+      (let [conn (.openConnection (java.net.URL. (str "http://localhost:" (http/server-port server)
+                                                      "/api/graph?nest=%zz")))]
+        (is (= 400 (.getResponseCode ^java.net.HttpURLConnection conn))))
+      (finally (explorer/stop server)))))
 
 (deftest a-declaration-is-answered-for-a-declared-node-only
   (let [[tag d] (:answer (explorer/declaration db {"id" high-id}))]
@@ -97,5 +167,31 @@
              (map :label (:nodes (second (:answer (get (str "/api/graph?nest=xholds&open="
                                                             (enc (json/generate-string [[high-id]]))))))))))
       (is (= "declaration" (first (:answer (get (str "/api/node?id=" (enc high-id)))))))
+      (is (= "drawing" (first (:answer (get "/api/drawing?nest=xholds")))))
       (is (some #(= "xholds" (:name %)) (:relations (second (:answer (get "/api/views"))))))
       (finally (explorer/stop server)))))
+
+(deftest the-page-draws-nothing-and-names-no-vocabulary
+  (let [page   (slurp (io/resource "public/explorer.html"))
+        script (slurp (io/resource "public/explorer.js"))]
+    (testing "the only script is the page's own: no layout library is loaded"
+      (is (= ["explorer.js"] (map second (re-seq #"<script[^>]*src=\"([^\"]+)\"" page)))))
+    (testing "the script creates no drawing element and holds no paint for one"
+      (is (not (re-find #"createElementNS|<rect|<path|<polyline" script)))
+      (is (not (re-find #"(?i)\belk\b|hsl\(" script)))
+      (is (not (re-find #"g\.box[^{]*\{[^}]*(fill|stroke)" page))))
+    (testing "it asks for the drawing, with the address's own view parameters"
+      (is (re-find #"api/drawing" script))
+      (is (re-find #"\['nest', 'link', 'select', 'open', 'unplaced', 'root'\]" script)))
+    (testing "the root is read from the address as one id, and an array root is replaced first"
+      (is (re-find #"root: q\.get\('root'\) \|\| ''" script))
+      ;; Every reading of the address — at load, on Back/Forward, for each request — is
+      ;; `address()`, so the rewrite lives there and no read can see an array root.
+      (let [at   (.indexOf script "const address = () =>")
+            body (when (<= 0 at) (subs script at (.indexOf script "\n};" at)))]
+        (is (some? body))
+        (is (re-find #"root\.startsWith\('\['\)" (str body)))
+        (is (re-find #"history\.replaceState" (str body))))
+      (is (= 1 (count (re-seq #"new URLSearchParams\(location\.search\)" script)))))
+    (testing "no sort and no relation of fukan's vocabulary is written in either"
+      (is (not (re-find #"Module|Subsystem|Operation|may-depend|\(Band" (str page script)))))))

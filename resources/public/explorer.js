@@ -1,24 +1,51 @@
 // The explorer's page. It owns exactly one piece of state — what the viewer chose — and keeps
-// it in the address: nest, link, select, open (the opened paths) and sel (the selected path).
-// Everything drawn is derived from the server's answer for that address, so a reload, a shared
-// link and the back button all mean the same thing.
+// it in the address. The view itself is there as the explorer's own graph-request parameters,
+// under the request's names and in its encodings: nest, link, select, open, unplaced, root. They
+// are sent as the address holds them. Beside them are three things only this page reads: trail
+// (the ids dived through to reach the root), sel (the selected path) and embed.
+//
+// The page draws nothing. It shows the SVG the explorer answers for the address, and of that
+// drawing it says one thing: which box is selected, by a class on that box's group.
 
-const SVG = 'http://www.w3.org/2000/svg';
 const $ = (id) => document.getElementById(id);
 const key = (path) => JSON.stringify(path);
 
 // ── the address ──────────────────────────────────────────────────────────────
 
+const VIEW = ['nest', 'link', 'select', 'open', 'unplaced', 'root'];
+const json = (text, otherwise) => { try { const v = JSON.parse(text); return v == null ? otherwise : v; } catch (_) { return otherwise; } };
+
+// The address as the explorer's transport reads it: one value per key, the LAST occurrence of a
+// repeated key winning. Every reading of the address goes through this, so the page cannot ask
+// for — or show — a different view than the one its address names.
+//
+// An address written by this page before `root` became one id carries the whole dived path
+// there, as a JSON array — at load, and again whenever Back or Forward restores an entry from
+// before. Reading it rewrites it in place, so nothing is asked of it first: the last id is the
+// root and the ids before it are the trail.
+const address = () => {
+  const q = new URLSearchParams();
+  for (const [k, v] of new URLSearchParams(location.search)) q.set(k, v);
+  const root = q.get('root') || '';
+  if (!root.startsWith('[')) return q;
+  const ids = json(root, []).filter((id) => typeof id === 'string');
+  q.delete('root'); q.delete('trail');
+  if (ids.length) q.set('root', ids[ids.length - 1]);
+  if (ids.length > 1) q.set('trail', JSON.stringify(ids.slice(0, -1)));
+  history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
+  return q;
+};
+
 function readState() {
-  const q = new URLSearchParams(location.search);
+  const q = address();
   const list = (k) => (q.get(k) || '').split(',').map((s) => s.trim()).filter(Boolean);
-  let open = [];
-  let sel = null;
-  let root = [];
-  try { root = JSON.parse(q.get('root') || '[]'); } catch (_) { root = []; }
-  try { open = JSON.parse(q.get('open') || '[]'); } catch (_) { open = []; }
-  try { sel = JSON.parse(q.get('sel') || 'null'); } catch (_) { sel = null; }
-  return { nest: list('nest'), link: list('link'), select: q.get('select') || '', unplaced: q.get('unplaced') === '1', embed: q.get('embed') === '1', root, open, sel };
+  return {
+    nest: list('nest'), link: list('link'), select: q.get('select') || '',
+    unplaced: q.get('unplaced') === '1', root: q.get('root') || '',
+    open: json(q.get('open') || '[]', []),
+    trail: json(q.get('trail') || '[]', []), sel: json(q.get('sel') || 'null', null),
+    embed: q.get('embed') === '1',
+  };
 }
 
 function writeState(state, push) {
@@ -27,12 +54,22 @@ function writeState(state, push) {
   if (state.link.length) q.set('link', state.link.join(','));
   if (state.select) q.set('select', state.select);
   if (state.unplaced) q.set('unplaced', '1');
-  if (state.embed) q.set('embed', '1');
-  if (state.root.length) q.set('root', JSON.stringify(state.root));
+  if (state.root) q.set('root', state.root);
   if (state.open.length) q.set('open', JSON.stringify(state.open));
+  if (state.trail.length) q.set('trail', JSON.stringify(state.trail));
   if (state.sel) q.set('sel', JSON.stringify(state.sel));
+  if (state.embed) q.set('embed', '1');
   const url = location.pathname + (q.toString() ? '?' + q : '');
   if (push) history.pushState(null, '', url); else history.replaceState(null, '', url);
+}
+
+// The request for the address as it stands: its view parameters, copied and not rebuilt.
+function request() {
+  const here = address();
+  const q = new URLSearchParams();
+  for (const k of VIEW) if (here.has(k)) q.set(k, here.get(k));
+  q.set('theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  return q;
 }
 
 let state = readState();
@@ -42,17 +79,7 @@ document.body.classList.toggle('embedded', state.embed);
 let relations = [];
 let drawn = 0; // guards against an older answer landing after a newer one
 
-// ── colour from a name, so no sort or relation is known here ─────────────────
-
-function hue(name) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return h % 360;
-}
-const dark = () => matchMedia('(prefers-color-scheme: dark)').matches;
-const sortColour = (sort) => `hsl(${hue(sort)} 45% ${dark() ? 62 : 42}%)`;
-const relColour = (rel) => `hsl(${hue('rel:' + rel)} 60% ${dark() ? 66 : 40}%)`;
-const shortSort = (sort) => sort.slice(sort.lastIndexOf('/') + 1);
+const shortName = (qualified) => qualified.slice(qualified.lastIndexOf('/') + 1);
 
 // ── the pickers ──────────────────────────────────────────────────────────────
 
@@ -85,7 +112,7 @@ function fillMenu(menu, chosen, onChange) {
 function renderPickers() {
   const toggle = (field) => (name, on) => {
     state[field] = on ? [...state[field], name] : state[field].filter((n) => n !== name);
-    if (field === 'nest') { state.open = []; state.sel = null; state.root = []; }
+    if (field === 'nest') { state.open = []; state.sel = null; state.root = ''; state.trail = []; }
     writeState(state, true);
     renderPickers();
     load();
@@ -114,36 +141,31 @@ async function load() {
       : 'No model is loaded. Build one at the REPL, then reload.');
     return;
   }
-  const q = new URLSearchParams({ nest: state.nest.join(','), link: state.link.join(','), open: JSON.stringify(state.open) });
-  if (state.select) q.set('select', state.select);
-  if (state.unplaced) q.set('unplaced', '1');
-  if (state.root.length) q.set('root', state.root[state.root.length - 1]);
   showCrumbs();
   let body;
   try {
-    body = await (await fetch('api/graph?' + q)).json();
+    body = await (await fetch('api/drawing?' + request())).json();
   } catch (e) {
     if (ticket === drawn) { clearCanvas(); notice('The explorer did not answer: ' + e.message, true); }
     return;
   }
   if (ticket !== drawn) return;
   $('at').textContent = 'model read ' + new Date(body.at).toLocaleTimeString();
-  const [outcome, value] = body.answer; // exactly one of: graph, rejected, unanswerable, no-model
-  const a = { graph: outcome === 'graph' ? value : null };
-  showUnplaced(a.graph ? a.graph.unplaced : []);
+  const [outcome, value] = body.answer; // exactly one of: drawing, rejected, unanswerable, no-model
+  showUnplaced(outcome === 'drawing' ? value.unplaced : []);
   if (outcome === 'no-model') { clearCanvas(); notice('No model is loaded. Build one at the REPL, then reload.'); return; }
   if (outcome === 'rejected') { clearCanvas(); notice(value, true); return; }
   if (outcome === 'unanswerable') { clearCanvas(); notice('The model could not answer this view:\n' + value, true); return; }
   showDetail();
-  if (!a.graph.nodes.length) {
+  if (!value.nodes) {
     clearCanvas();
-    notice(a.graph.unplaced.length
+    notice(value.unplaced.length
       ? 'Nothing in this view is placed by ' + state.nest.join(', ') + '.'
       : 'Nothing in the declared design matches this view.');
     return;
   }
   notice('');
-  await draw(a.graph, ticket);
+  show(value.svg);
 }
 
 // The nodes the chosen nesting says nothing about: they are a gap in the model, so the page says
@@ -159,179 +181,81 @@ function showUnplaced(counts) {
   const toggle = document.createElement('button');
   toggle.textContent = state.unplaced ? 'Hide' : 'Show';
   toggle.addEventListener('click', () => { state.unplaced = !state.unplaced; writeState(state, true); load(); });
-  box.append(head, ' · ' + counts.map((c) => c.count + ' ' + shortSort(c.sort)).join(', '), toggle);
+  box.append(head, ' · ' + counts.map((c) => c.count + ' ' + shortName(c.sort)).join(', '), toggle);
 }
 
-// The view's root is kept as the PATH that was dived along, though the server is asked only for
-// its last id: the path is what lets the viewer step back out one level at a time.
+// The ids dived along are the trail and then the root. The explorer is asked for the root alone;
+// the trail is what lets the viewer step back out one level at a time.
+const dived = () => (state.root ? [...state.trail, state.root] : []);
+
 function showCrumbs() {
   const nav = $('crumbs');
+  const ids = dived();
   nav.textContent = '';
-  nav.classList.toggle('on', state.root.length > 0);
+  nav.classList.toggle('on', ids.length > 0);
   const step = (label, depth) => {
-    const a = document.createElement(depth === state.root.length ? 'b' : 'a');
+    const a = document.createElement(depth === ids.length ? 'b' : 'a');
     a.textContent = label;
-    if (depth !== state.root.length) a.addEventListener('click', () => setRoot(state.root.slice(0, depth)));
+    if (depth !== ids.length) a.addEventListener('click', () => setRoot(ids.slice(0, depth)));
     return a;
   };
   nav.append(step('top', 0));
-  state.root.forEach((id, i) => nav.append(' › ', step(id.slice(id.lastIndexOf('/') + 1), i + 1)));
+  ids.forEach((id, i) => nav.append(' › ', step(shortName(id), i + 1)));
 }
 
-function setRoot(path) {
-  state.root = path; state.open = []; state.sel = null;
+function setRoot(ids) {
+  state.root = ids.length ? ids[ids.length - 1] : '';
+  state.trail = ids.slice(0, -1);
+  state.open = []; state.sel = null;
   writeState(state, true);
   showDetail();
   load();
 }
 
-// ── layout ───────────────────────────────────────────────────────────────────
+// ── showing the drawing ──────────────────────────────────────────────────────
 
-const elk = new ELK();
-const LEAF_H = 40;
-const leafWidth = (n) => Math.max(96, 30 + 7 * Math.max(n.label.length, shortSort(n.sort).length * 0.85 + 4));
+function clearCanvas() { $('viewport').textContent = ''; }
 
-function toElk(graph) {
-  const byKey = new Map(graph.nodes.map((n) => [key(n.path), { n, kids: [] }]));
-  const roots = [];
-  for (const entry of byKey.values()) {
-    const parent = entry.n.path.length > 1 ? byKey.get(key(entry.n.path.slice(0, -1))) : null;
-    (parent ? parent.kids : roots).push(entry);
-  }
-  const build = ({ n, kids }) => {
-    const node = { id: key(n.path), labels: [{ text: n.label }] };
-    if (kids.length) {
-      node.children = kids.map(build);
-      node.layoutOptions = { 'elk.padding': '[top=40,left=14,bottom=14,right=14]' };
-    } else {
-      node.width = leafWidth(n);
-      node.height = LEAF_H;
-    }
-    return node;
-  };
-  return {
-    id: 'root',
-    layoutOptions: {
-      'elk.algorithm': 'layered',
-      'elk.direction': 'DOWN',
-      'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '46',
-      'elk.spacing.nodeNode': '22',
-      'elk.spacing.edgeNode': '14',
-      'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-    },
-    children: roots.map(build),
-    edges: graph.edges.map((e, i) => ({ id: 'e' + i, sources: [key(e.from)], targets: [key(e.to)] })),
-  };
+const boxes = () => $('viewport').querySelectorAll('g.box');
+const pathOf = (g) => JSON.parse(g.dataset.path);
+
+function markSelected() {
+  const sel = key(state.sel);
+  for (const g of boxes()) g.classList.toggle('sel', key(pathOf(g)) === sel);
 }
 
-// ── drawing ──────────────────────────────────────────────────────────────────
+let fitted = null; // the view and drawing size the camera was last fitted for
 
-function el(name, attrs, text) {
-  const node = document.createElementNS(SVG, name);
-  for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
-  if (text != null) node.textContent = text;
-  return node;
-}
-
-function clearCanvas() {
-  $('boxes').textContent = '';
-  $('nodes').textContent = '';
-  $('edges').textContent = '';
-  $('defs').textContent = '';
-  $('legend').textContent = '';
-}
-
-let fitted = null; // the view and drawing size the viewport was last fitted for
-
-async function draw(graph, ticket) {
-  const laid = await elk.layout(toElk(graph));
-  if (ticket !== drawn) return;
-  clearCanvas();
-  const info = new Map(graph.nodes.map((n) => [key(n.path), n]));
-  const origin = new Map([['root', { x: 0, y: 0 }]]);
-
-  const place = (node, ox, oy) => {
-    const x = ox + node.x, y = oy + node.y;
-    origin.set(node.id, { x, y });
-    const n = info.get(node.id);
-    const colour = sortColour(n.sort);
-    const g = el('g', { class: 'node' + (n.open ? ' open' : '') + (key(state.sel) === node.id ? ' sel' : ''), transform: `translate(${x},${y})` });
-    g.append(el('rect', { width: node.width, height: node.height, rx: 7, stroke: colour }));
-    g.append(el('text', { x: 12, y: 17 }, n.label));
-    g.append(el('text', { x: 12, y: 31, class: 'kind' }, shortSort(n.sort)));
-    if (n.members > 0) {
-      const t = el('g', { class: 'toggle', transform: `translate(${node.width - 44},4)` });
-      t.append(el('rect', { width: 40, height: 22 }));
-      t.append(el('text', { x: 36, y: 15, 'text-anchor': 'end' }, (n.open ? '▾ ' : '▸ ') + n.members));
-      t.addEventListener('click', (ev) => { ev.stopPropagation(); toggleOpen(n.path); });
-      g.append(t);
-    }
-    g.addEventListener('click', (ev) => { ev.stopPropagation(); select(n.path); });
-    g.addEventListener('dblclick', (ev) => { ev.stopPropagation(); if (n.members > 0) setRoot([...state.root, ...n.path]); });
-    // An opened box is drawn UNDER the edges and a closed one over them: an edge to a member
-    // runs across its container's interior, and an opaque box above it would cut the edge off
-    // at the border, reading as an edge to the container.
-    ((node.children || []).length ? $('boxes') : $('nodes')).append(g);
-    for (const child of node.children || []) place(child, x, y);
-  };
-  for (const child of laid.children || []) place(child, 0, 0);
-
-  const rels = [...new Set(graph.edges.map((e) => e.relation))];
-  for (const rel of rels) {
-    const marker = el('marker', { id: 'arrow-' + rels.indexOf(rel), viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 9, markerHeight: 9, markerUnits: 'userSpaceOnUse', orient: 'auto-start-reverse' });
-    marker.append(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: relColour(rel) }));
-    $('defs').append(marker);
-  }
-  const drawEdges = (container) => {
-    for (const edge of container.edges || []) {
-      const e = graph.edges[Number(edge.id.slice(1))];
-      const o = origin.get(edge.container || container.id) || { x: 0, y: 0 };
-      const g = el('g', { class: 'edge' });
-      for (const s of edge.sections || []) {
-        const pts = [s.startPoint, ...(s.bendPoints || []), s.endPoint].map((p) => [p.x + o.x, p.y + o.y]);
-        const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0] + ',' + p[1]).join(' ');
-        g.append(el('path', { d, stroke: relColour(e.relation), 'stroke-width': Math.min(4, 1 + Math.log2(e.count)), 'marker-end': `url(#arrow-${rels.indexOf(e.relation)})`, opacity: 0.85 }));
-        if (e.count > 1) {
-          const mid = pts[Math.floor((pts.length - 1) / 2)], nxt = pts[Math.floor((pts.length - 1) / 2) + 1];
-          g.append(el('text', { x: (mid[0] + nxt[0]) / 2 + 4, y: (mid[1] + nxt[1]) / 2 - 3 }, e.count));
-        }
-      }
-      const title = el('title', {}, `${e.from[e.from.length - 1]} —${e.relation}→ ${e.to[e.to.length - 1]}` + (e.count > 1 ? ` (${e.count} declared edges)` : ''));
-      g.append(title);
-      $('edges').append(g);
-    }
-    for (const child of container.children || []) drawEdges(child);
-  };
-  drawEdges(laid);
-
-  const legend = $('legend');
-  for (const rel of rels) {
-    const item = document.createElement('span');
-    const swatch = document.createElement('i');
-    swatch.style.borderColor = relColour(rel);
-    item.append(swatch, rel);
-    legend.append(item);
-  }
-  for (const sort of [...new Set(graph.nodes.map((n) => n.sort))].sort()) {
-    const item = document.createElement('span');
-    const swatch = document.createElement('u');
-    swatch.style.background = sortColour(sort);
-    item.title = sort;
-    item.append(swatch, shortSort(sort));
-    legend.append(item);
-  }
-
+function show(svg) {
+  $('viewport').innerHTML = svg;
+  const picture = $('viewport').firstElementChild;
+  const w = Number(picture.getAttribute('width')), h = Number(picture.getAttribute('height'));
+  markSelected();
   // Opening or closing a box moves everything, so the old camera would point at empty canvas;
-  // a selection redraws at the same size and keeps the camera where the viewer put it.
-  const view = [state.nest.join(','), state.select, state.unplaced, key(state.root), laid.width, laid.height].join('|');
-  if (fitted !== view) { fit(laid.width, laid.height); fitted = view; }
+  // a redraw at the same size keeps the camera where the viewer put it.
+  const view = [state.nest.join(','), state.select, state.unplaced, state.root, w, h].join('|');
+  if (fitted !== view) { fit(w, h); fitted = view; }
 }
+
+// A click lands on a mark; the group around it says which occurrence it belongs to, and the
+// mark's role whether it is the marker that opens and closes the box.
+$('viewport').addEventListener('click', (ev) => {
+  const g = ev.target.closest('g.box');
+  if (!g) return;
+  ev.stopPropagation();
+  if (ev.target.closest('[data-role="toggle"]')) toggleOpen(pathOf(g)); else select(pathOf(g));
+});
+$('viewport').addEventListener('dblclick', (ev) => {
+  const g = ev.target.closest('g.box');
+  if (!g || !(Number(g.dataset.members) > 0)) return;
+  ev.stopPropagation();
+  setRoot([...dived(), ...pathOf(g)]);
+});
 
 // ── pan and zoom ─────────────────────────────────────────────────────────────
 
 const cam = { x: 20, y: 20, k: 1 };
-const applyCam = () => $('viewport').setAttribute('transform', `translate(${cam.x},${cam.y}) scale(${cam.k})`);
+const applyCam = () => { $('viewport').style.transform = `translate(${cam.x}px,${cam.y}px) scale(${cam.k})`; };
 
 function fit(w, h) {
   const box = $('canvas').getBoundingClientRect();
@@ -350,7 +274,7 @@ function fit(w, h) {
   let drag = null;
   let panned = false; // the gesture now ending moved the canvas, so its click selects nothing
   svg.addEventListener('pointerdown', (ev) => {
-    if (ev.target.closest('.node')) return;
+    if (ev.target.closest('g.box')) return;
     drag = { x: ev.clientX - cam.x, y: ev.clientY - cam.y, sx: ev.clientX, sy: ev.clientY };
     panned = false;
     svg.setPointerCapture(ev.pointerId);
@@ -389,12 +313,12 @@ function toggleOpen(path) {
   load();
 }
 
-async function select(path) {
+function select(path) {
   if (key(path) === key(state.sel)) return;
   state.sel = path;
   writeState(state, false);
-  for (const g of document.querySelectorAll('.node.sel')) g.classList.remove('sel');
-  load();
+  markSelected();
+  showDetail();
 }
 
 // An authored form, coloured by token: strings, keywords, comments, brackets, and the symbol
@@ -462,8 +386,9 @@ async function showDetail() {
 $('select').addEventListener('keydown', (ev) => {
   if (ev.key !== 'Enter') return;
   state.select = ev.target.value.trim();
-  state.open = []; state.sel = null; state.root = [];
+  state.open = []; state.sel = null; state.root = ''; state.trail = [];
   writeState(state, true);
+  showDetail();
   load();
 });
 $('reload').addEventListener('click', () => { boot(); });

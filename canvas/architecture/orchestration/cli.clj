@@ -6,8 +6,13 @@
    of it) and `elements` (what are the declared things, as data to join on). The split between
    `check` and `report` is the whole point of having both — `check` decides the model and may be
    scoped by nothing, `report` measures a slice and gates on nothing — so only the verb that
-   decides can fail a build. A fifth, `explore`, answers no question: it serves the explorer over
-   the declaration until killed, for a program that embeds it and holds no REPL.
+   decides can fail a build.
+
+   Three more are about looking at the declaration rather than judging against it. `view` answers
+   one view of it — the graph, an image of its drawing, and the address that shows the same view
+   in a running explorer — with no server running. `selection` prints the selection language for
+   this model, with selections that ran against it. `explore` serves the explorer over the
+   declaration until killed, for a program that embeds it and holds no REPL.
 
    A sibling of `core` in the orchestration subsystem, and for the same reason: it composes the
    model lifecycle behind a `-main` and realizes no subject faculty of its own. Its judgement is
@@ -20,6 +25,8 @@
             [canvas.architecture.kernel.lens :as lens]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.projection.design :as design]
+            [canvas.architecture.projection.drawing :as drawing]
+            [canvas.architecture.projection.reference :as reference]
             [canvas.architecture.projection.instance :as instance]
             [canvas.architecture.orchestration.infra :as infra]
             [canvas.architecture.orchestration.pipeline :as pipeline]
@@ -27,7 +34,7 @@
 
 (Module cli
   "The non-REPL entry — describe a project's declared design, check the code against it, report
-   how far one region of it still has to go, or serve it to a browser."
+   how far one region of it still has to go, look at one view of it, or serve it to a browser."
   (Operation findings
     "`check`'s violations with every offender eid resolved to its name — the shape a consumer
      that never loaded the model can act on. Offenders stay TUPLES: a law binding an edge
@@ -58,10 +65,13 @@
   (Operation -main
     "Entry point: dispatch the verb, build the model under the given spec-dirs, print the
      result — exit 0 satisfied, 1 unsatisfied, 2 undecidable. `report` never answers 1: it
-     measures, and only a law it could not evaluate makes it undecidable. `explore` prints the
-     address it serves on and does not exit."
+     measures, and only a law it could not evaluate makes it undecidable. `view` hands its flags
+     to the explorer's own answer as a graph request's parameters, so a view asked here and one
+     asked of a running explorer are parsed and refused alike; a request that is refused is
+     undecidable. `explore` prints the address it serves on and does not exit."
     {:signature [:=> [:catn [:args [:sequential :string]]] :nil]
      :performs  [:io :require :state :throws]
      :delegates [infra/load-model pipeline/build-model cozo-law/check lens/focus-nodes
                  design/design-text instance/violations-text findings tally element-rows
-                 explorer/start explorer/port]}))
+                 explorer/start explorer/port explorer/answer explorer/address
+                 drawing/draw drawing/svg drawing/png reference/selection-reference]}))
