@@ -25,7 +25,7 @@
 ;; its domain. The labels are this composition's to choose; the kernel stamps what it is handed.
 ;; One slot, because a Lexicon view points at the namespace declaring it by name, and a reference
 ;; across planes resolves only when both sets of roots assemble together. The Lexicon producer
-;; adds nothing for a project that binds no `lexicon/*sources*`.
+;; adds nothing for a project that does not declare its domain with the Lexicon library.
 (extraction/register-fact-extractor!
  (fn [root]
    {:planes {"code"   (:roots (target/extract-roots [root]))    ; target -> fukan.common.extraction.core

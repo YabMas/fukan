@@ -1,0 +1,15 @@
+{:paths ["src"]
+ ;; Lexicon has no published coordinate yet: it is read from a checkout beside fukan's.
+ :deps {org.clojure/clojure {:mvn/version "1.11.1"}
+        metosin/malli {:mvn/version "0.16.4"}
+        lexicon/lexicon {:local/root "../../../lexicon"}}
+ :aliases
+ {;; clojure -M:test — the code runs, with every signature enforced
+  :test {:extra-paths ["test"]
+         :extra-deps {io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+         :main-opts ["-m" "cognitect.test-runner"]}
+  ;; clojure -M:fukan -m fukan.cli check --src src --spec-dirs design --format text
+  ;; `.` is on the path because a design is found as `<spec-dir>/…` on the classpath.
+  :fukan {:extra-paths ["."]
+          :extra-deps {fukan/fukan {:local/root "../.."}}
+          :jvm-opts ["-Dclj-reload.auto-init=false"]}}}
