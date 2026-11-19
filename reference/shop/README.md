@@ -38,9 +38,10 @@ spelled identically in three places:
 
 ## Rules it keeps
 
-1. The vocabulary is one `lexicon/vocabulary` over a literal vector of shapes.
+1. The vocabulary is one `lexicon/vocabulary` over a literal vector of shapes, installed where
+   it is declared (`lexicon.install/vocabulary!`).
 2. A view is declared, by name, in the namespace that takes it: `lexicon/views` over a literal
-   map, handed to `domain/install!` before the namespace's first function.
+   map, handed to `lexicon.install/views!` before the namespace's first function.
 3. A function is a `malli.experimental/defn`, annotated in full.
 4. A signature names only attributes, views, and Malli's scalars and collections. No var, no
    schema built by a call.
@@ -50,7 +51,5 @@ spelled identically in three places:
 
 ## Not settled
 
-- `shop.domain` installs the Malli registry itself. Every project would copy those lines.
 - A thing that flows but is no part of the domain (a clock, a connection) has no spelling here
   yet. `shop.store` takes scalars.
-- `shop.domain` is not in the design: its two functions are that plumbing.

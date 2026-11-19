@@ -382,10 +382,11 @@ brian's 529 unresolved names would resolve.) What made it work, and what is stil
   dialect does not cover, is not stored and not guessed — the function is marked
   `:signature-unread`. That holds for `:malli/schema` too, which used to THROW. In the one way
   no signature is an expression: every name is a keyword.
-- ⚠ The project still installs the registry itself (`shop.domain`: a mutable Malli registry and
-  an `install!` each view-declaring namespace calls — Malli builds a function schema when the
-  function is DEFINED, so the words must resolve by then). Six lines every adopter would copy;
-  where they belong (Lexicon declares and installs nothing) is open.
+- THE WORDS ARE INSTALLED BY LEXICON (`lexicon.install`, its second namespace): Malli builds a
+  function schema when the function is DEFINED, so the words must be in Malli's default
+  registry by then. `(install/vocabulary! …)` where the vocabulary is declared,
+  `(install/views! (lexicon/views …))` before a namespace's first function; `lexicon.core`
+  stays pure and the producer still recognises its calls inside those.
 - ⚠ Not yet: the dialect covers a subset of Malli's builtins (`:qualified-keyword` reads as an
   unresolved reference); `speaks-of` follows collections and unions but not a `[:map …]`'s
   fields; nothing checks a view's namespace against the Module declaring it, nor a design

@@ -2,12 +2,13 @@
   "What a customer owes and where the bill goes. It has a `summary` of its own, which is not
    checkout's: a view's name is whole."
   (:require [lexicon.core :as lexicon]
+            [lexicon.install :as install]
             [malli.experimental :as mx]
             [shop.checkout :as checkout]
             [shop.domain :as domain]
             [shop.store :as store]))
 
-(domain/install!
+(install/views!
  (lexicon/views domain/vocabulary
                 {:billing/summary [:customer/id :customer/name :customer/address]}))
 
