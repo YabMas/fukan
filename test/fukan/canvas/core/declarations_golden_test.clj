@@ -532,13 +532,17 @@
 ;; producer's `speaks-of`/`takes-attribute`/`gives-attribute`/`hands-to`, and the closures the compiler mints for the
 ;; binary ones. Laws 108→108: the count holds and the hash moves, because the one law that asked
 ;; for a Kind (`:typing/reference-unresolved`) now asks for a named type.
-(def ^:private golden-terms {:count 246 :hash 290659491})
+;; 2026-11-19 (a function's footprint in the domain): the Lexicon producer's `ViewUse` — one
+;; function naming one view in its body — and the relations reading it (`fn-uses`, `fn-reads`,
+;; `reaches-entity`). Terms 246→263 (+17), laws 108→116 (+8): all eight are the slot laws
+;; `ViewUse`'s three slots generate (cardinality and target type); the producer still authors none.
+(def ^:private golden-terms {:count 263 :hash -537140468})
 ;; 2026-09-22 (later still): every authored law in the shipped vocabulary carries a stable `:key`
 ;; — Region, Band, Subsystem, Stratum, Kind and the malli dialect were reachable only by matching
 ;; their DESCRIPTION, which goes silently green when the sentence is reworded and silent altogether
 ;; when a law is added. Counts unchanged; the laws hash moves because `:key` is part of the
 ;; snapshot's per-law tuple, which is the point — a key is now emission the golden guards.
-(def ^:private golden-laws  {:count 108 :hash -1115205481})
+(def ^:private golden-laws  {:count 116 :hash -1461981474})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

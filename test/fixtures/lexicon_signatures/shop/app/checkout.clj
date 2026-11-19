@@ -7,9 +7,17 @@
 (def Placement (lexicon/view [:order/id :order/customer]))
 (def Label     (lexicon/view [:customer/id :customer/name]))
 
+(defn- pull
+  "Stands in for a store read. Names no view; whoever calls it says which."
+  [_view _id] {})
+
+(defn- load-receipt
+  "Names the view in its BODY — the one place this namespace asks the store for a shape."
+  [id] (pull Receipt id))
+
 (defn receipt
   {:malli/schema [:=> [:cat :order/id] Receipt]}
-  [id] {:order/id id :order/total 0 :customer/name ""})
+  [id] (load-receipt id))
 
 (defn place
   {:malli/schema [:=> [:cat :customer/id [:vector :line/product]] Placement]}

@@ -88,3 +88,28 @@
   (let [unresolved (->> (found (model) :typing/reference-unresolved)
                         (mapcat :offenders) (map first) set)]
     (is (= #{"Missing" "order/colour"} unresolved))))
+
+(deftest a-function-reaches-what-it-reads-through-what-it-calls
+  (let [db    (model)
+        reach (fn [rel] (set (cq/q (list :find '?fn '?en :in '$ '% :where (list rel '?f '?e)
+                                         '[?f :entity/name ?fn] '[?e :entity/name ?en])
+                                   db (s/vocab-rules))))]
+    (testing "one function names the view in its body — a signature naming it is not a use"
+      (is (= #{["load-receipt" "order"] ["load-receipt" "customer"]}
+             (disj (reach 'fn-reads) ["pair" "customer"]))))
+    (testing "its callers reach the same entities, at any depth"
+      (is (= #{["load-receipt" "order"] ["load-receipt" "customer"]
+               ["receipt" "order"] ["receipt" "customer"]
+               ["print-receipt" "order"] ["print-receipt" "customer"]}
+             (disj (reach 'reaches-entity) ["pair" "customer"]))))
+    (testing "a function declaring a view inline uses it"
+      (is (contains? (reach 'fn-reads) ["pair" "customer"])
+          "from the vocabulary fixture's `shop.domain.orders/pair`")
+      (is (contains? (lx/footprint db) ["shop.domain.orders" "customer"])))
+    (testing "by namespace: how far the domain's words travel"
+      (is (contains? (lx/footprint db) ["shop.app.checkout" "order"])))))
+
+(deftest a-signature-claiming-what-nothing-explains
+  (testing "`place` gives an order, takes nothing of one and reads none; `label` is handed the
+            customer it gives, and `receipt` reaches the order it gives"
+    (is (= #{["shop.app.checkout" "place" "order"]} (lx/unread-claims (model))))))
