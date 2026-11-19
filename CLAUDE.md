@@ -340,10 +340,25 @@ made it work:
   `takes-attribute`, `gives-attribute` and `hands-to` read a signature in the domain's terms, for
   an Operation and a function alike. ⚠ A shipped relation name is GLOBAL: the first spelling,
   `:takes`/`:gives`, collided with a consumer's slot of that name and threw at registration.
+- WHAT A FUNCTION ACTUALLY READS (2026-11-19) is a third thing, beside where a view is declared
+  and what a signature says: the producer emits a `ViewUse` per function naming a view in its
+  BODY (a view named in the attribute map, the parameters or an inline `:-` is the signature
+  speaking, and is not a use). `fn-uses` → `fn-reads` → `reaches-entity` (itself, or through
+  what it calls) is a function's FOOTPRINT; `lx/footprint` reads it by namespace, and
+  `lx/unread-claims` lists functions whose signature gives an attribute of an entity they
+  neither reach nor are handed anything of. Readings, not laws. On brian: 105 uses, 999
+  functions reaching an entity, 451 namespace×entity pairs against the 66 `context-map` sees.
+  ⚠ `reaches-entity`'s step body LEADS WITH THE RECURSIVE CALL — walking callers backward from
+  the ~100 functions that read anything: 0.2s. Written forward (`calls+` then `fn-reads`) it
+  closed the whole call graph first: 17s for the same 1,627 rows. ⚠ A `ViewUse` holds its
+  function by namespace + NAME, not by reference: what source calls a function need not be one
+  in the model. A local shadowing a view's var reads as the view.
+- Lexicon itself (2026-11-19) offers `lexicon/registry`: the vocabulary's attributes as a Malli
+  registry, so `[:=> [:cat :order/id] Receipt]` is a real schema at runtime too.
 - ⚠ Not yet: resolution is by SHORT name (two views called `Summary` both answer); `speaks-of`
   follows collections and unions but not a `[:map …]`'s fields; only `:malli/schema` metadata is
-  extracted, not an `mx/defn`'s inline `:-`; and a bare `:order/id` is a runtime Malli schema only
-  once Lexicon offers the attribute's schema (a view already is one).
+  extracted, not an `mx/defn`'s inline `:-`; and nothing yet checks a
+  design Operation's claim against its function's footprint.
 
 **BRIDGES AND PLANES (2026-11-17).** A correspondence is a statement about two PLANES of the one
 graph, and nothing in its lowering is about code: a pairing rule over two sort tags, a

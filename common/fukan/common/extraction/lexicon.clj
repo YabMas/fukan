@@ -74,6 +74,16 @@
    :declared-in Ns}
   (sub NamedType))                    ; a signature may name it: `Summary` where a shape passes
 
+(defstructure ViewUse
+  "One function naming one view in its body — where code actually ASKS for a shape, as against
+   where the shape is declared or what a signature says of it. The function is held by its
+   namespace and its NAME rather than pointed at: what the source calls a function (a macro
+   that defines one, a form the Clojure extractor does not count) need not be one in the model,
+   and a use by something the model lacks is then simply a use nothing answers to."
+  {:use-of     View
+   :use-within Ns
+   :use-by     :string})
+
 ;; ── derived readings, at domain altitude ─────────────────────────────────────
 
 (defrelation :entity-references
@@ -93,6 +103,28 @@
    map: which part of the system depends on knowing which part of the domain."
   [?ns ?e]
   [(declared-in ?v ?ns) (view-reads ?v ?e)])
+
+;; ── what a function actually reads ───────────────────────────────────────────
+
+(defrelation :fn-uses
+  "Function ?f names view ?v in its body."
+  [?f ?v]
+  [(use-of ?u ?v) (use-within ?u ?ns) [?u :val/use-by ?n] (child ?ns ?f) [?f :entity/name ?n]])
+
+(defrelation :fn-reads
+  "Function ?f itself reads entity ?e: it names a view selecting one of ?e's attributes."
+  [?f ?e]
+  [(fn-uses ?f ?v) (view-reads ?v ?e)])
+
+;; The step leads with the recursive call on purpose: the functions reading anything themselves
+;; are few, and walking the call graph BACKWARD from them touches only their callers. Stated
+;; forward (`calls+` then `fn-reads`) it closes the whole call graph first.
+(defrelation :reaches-entity
+  "Function ?f reads entity ?e itself, or calls — at any depth — a function that does. A
+   function's footprint in the domain."
+  [?f ?e]
+  [(fn-reads ?f ?e)]
+  [(reaches-entity ?g ?e) (calls ?f ?g)])
 
 ;; ── signatures written in the domain's language ──────────────────────────────
 ;; A signature may NAME an attribute (`:order/id`, where one value passes) or a view (`Summary`,
@@ -273,6 +305,51 @@
        distinct
        (sort-by str)))
 
+(defn- function-body
+  "The body forms of a top-level function definition `form`, every arity's: what is left once
+   the name, docstring, attribute map, parameter vectors and inline `:-` annotations are set
+   aside. A view named in any of those is the function's SIGNATURE speaking, not its body."
+  [form]
+  (let [skip    (fn [xs] (drop-while #(or (string? %) (map? %)) xs))
+        typed   (fn [xs] (if (= :- (first xs)) (drop 2 xs) xs))
+        more    (-> (drop 2 form) skip typed skip)
+        arities (if (vector? (first more)) [more] (filter seq? more))]
+    (mapcat (fn [[_params & body]] (typed body)) arities)))
+
+(defn- use-roots
+  "The ViewUse roots of the file whose forms are `forms`: per top-level function, each view its
+   body names — a var holding one, reached bare, by a referred name or through an alias — and
+   each view it declares inline. `view-ids` are the ids of every view declared in the project.
+   A local that shadows a view's var is read as the view: this reads names, it does not resolve
+   scope."
+  [view-ids forms]
+  (when-let [nsf (ns-form forms)]
+    (let [this-ns (second nsf)
+          {:keys [alias refer]} (require-map nsf)
+          view-id (fn [sym]
+                    (let [lib (if-let [a (namespace sym)]
+                                (get alias (symbol a) a)
+                                (get refer sym this-ns))
+                          id  (str "view:" lib "/" (name sym))]
+                      (when (view-ids id) id)))]
+      (for [form forms
+            :when (and (seq? form) (symbol? (first form)) (symbol? (second form))
+                       (str/starts-with? (name (first form)) "defn"))
+            :let  [fname  (str (second form))
+                   inline (keep #(when (str/starts-with? % (str "view:" this-ns "/" fname "@")) %)
+                                view-ids)
+                   own    (str "view:" this-ns "/" fname)]
+            vid   (distinct (concat (when (view-ids own) [own])
+                                    inline
+                                    (keep view-id (filter symbol? (tree-seq inside inside
+                                                                            (function-body form))))))]
+        [(str "use:" this-ns "/" fname ">" vid)
+         (sub/->InstanceValue
+          ::ViewUse (str fname ">" (subs vid 5)) nil {:val/use-by fname}
+          [{:rk :use-of     :card :one :targets [(sub/->Ref vid)]}
+           {:rk :use-within :card :one :targets [(sub/->Ref (str this-ns))]}]
+          false)]))))
+
 (defn- view-roots
   "The View roots declared in the file whose forms are `forms`. A view is named for the top-level
    var its call sits in; a second call in the same form, or a call in a form that binds no var,
@@ -339,9 +416,20 @@
                            :let  [d (entity-declaration form)]
                            :when d]
                        d)
-            {:keys [attributes roots]} (vocabulary-roots decls)]
-        {:roots (vec (concat roots
-                             (mapcat #(view-roots makers attributes (:forms %)) read)))}))))
+            {:keys [attributes roots]} (vocabulary-roots decls)
+            views    (vec (mapcat #(view-roots makers attributes (:forms %)) read))
+            view-ids (set (map first views))
+            ;; a view is USED wherever its var is named, which may be a file that mentions
+            ;; neither the vocabulary nor a maker — only the namespace declaring the view
+            holders  (set (map #(second (re-find #"^view:(.*)/" %)) view-ids))
+            seen     (set (map :file read))
+            users    (for [path paths
+                           f    (source-files path)
+                           :when (and (not (seen (str f)))
+                                      (let [text (slurp f)] (some #(str/includes? text %) holders)))]
+                       {:forms (extraction/read-forms (str f))})]
+        {:roots (vec (concat roots views
+                             (mapcat #(use-roots view-ids (:forms %)) (concat read users))))}))))
 
 ;; ── readings ─────────────────────────────────────────────────────────────────
 
@@ -367,6 +455,29 @@
   [db]
   (set (cq/q '[:find ?nn ?en :in $ %
                :where (ns-reads ?ns ?e) [?ns :entity/name ?nn] [?e :entity/name ?en]]
+             db (s/vocab-rules))))
+
+(defn footprint
+  "Which namespaces hold a function REACHING which entity — reading it through a view, itself or
+   through what it calls — as a set of `[namespace entity]` name pairs. `context-map` says where
+   the domain's words are written down; this says how far they travel."
+  [db]
+  (set (cq/q '[:find ?nn ?en :in $ %
+               :where (reaches-entity ?f ?e) (child ?ns ?f) (is ?ns :fukan.common.extraction.clojure.module/Ns)
+                      [?ns :entity/name ?nn] [?e :entity/name ?en]]
+             db (s/vocab-rules))))
+
+(defn unread-claims
+  "Functions whose signature GIVES an attribute of an entity they neither reach nor are handed
+   any attribute of, as a set of `[namespace function entity]` name triples: the signature says
+   the function knows something of the entity, and nothing it reads or takes says how. A
+   reading, not a law — a function may build a value from nothing (a constructor does)."
+  [db]
+  (set (cq/q '[:find ?nn ?fn ?en :in $ %
+               :where (gives-attribute ?f ?a) (attribute ?e ?a) (child ?ns ?f) (is ?ns :fukan.common.extraction.clojure.module/Ns)
+                      (not (reaches-entity ?f ?e))
+                      (not-join [?f ?e] (takes-attribute ?f ?b) (attribute ?e ?b))
+                      [?ns :entity/name ?nn] [?f :entity/name ?fn] [?e :entity/name ?en]]
              db (s/vocab-rules))))
 
 (defn attribute-readers
