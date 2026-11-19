@@ -540,7 +540,11 @@ A `defstructure` is a composition of **slots** plus **laws**:
   carry). One map of `slot → value`: a plural slot takes a VECTOR of targets
   (authoring order = `:rel/order`; the bracket mirrors the quantifier), a labelled
   target is a `[label target]` pair, a payload slot takes `[value payload]`, reader
-  literals pass as values. Entity instances always require the symbol; only
+  literals pass as values. ⚠ The label pair is NOT looked for in the authored value of a slot a
+  READER reads (a `Schema` slot): that value is the dialect's whole, since a dialect's forms need
+  not avoid the kernel's shorthand — malli's `[int? {:min 1}]` has exactly its shape, and before
+  2026-11-19 was taken apart (and `[Foo Bar]` silently read as `Bar` labelled `Foo`). Labels on
+  such targets are the reader's to give, in the clauses it emits (`[:catn [x T]]`). Entity instances always require the symbol; only
   `^:value` structures are anonymous expressions. ⚠ TWO INSTANCES MAY NOT SHARE A SYMBOL in one
   namespace — the symbol IS the var, so a second `def` replaces the first while the first's
   container keeps the VAR and ends up owning the second's node. Silently: one operation where two

@@ -452,17 +452,32 @@
    on a Schema `:of` element or a grammar `:rhs` symbol.)
 
    When `target-sdef` has a `:reader`, data literals are expanded via the reader
-   (§2.1 reader-slot exception). A `[label literal]` form for a reader-slot
-   extracts the label and reader-expands the target part."
-  ([args] (parse-clause-arg-forms args nil))
-  ([args target-sdef]
-   (let [arg->form  (if (and target-sdef (:reader target-sdef))
-                      (partial reader-arg->form (:tag target-sdef) (:reader target-sdef))
+   (§2.1 reader-slot exception). In the clauses a READER emits, a `[label literal]` form
+   extracts the label and reader-expands the target part; in what an AUTHOR wrote
+   (`authored?`), the whole value is the reader's and no label is looked for."
+  ([args] (parse-clause-arg-forms args nil false))
+  ([args target-sdef] (parse-clause-arg-forms args target-sdef false))
+  ([args target-sdef authored?]
+   (let [reader     (when target-sdef (:reader target-sdef))
+         arg->form  (if reader
+                      (partial reader-arg->form (:tag target-sdef) reader)
                       ref-arg->form)
          parse-elem (fn [a]
-                      (if (and (vector? a) (= 2 (count a)) (symbol? (first a)))
+                      (cond
+                        ;; An AUTHORED value of a slot a reader reads belongs to the reader whole.
+                        ;; The label shape is the kernel's own shorthand, and a dialect's forms
+                        ;; need not avoid it: malli's `[int? {:min 1}]` is a 2-element,
+                        ;; symbol-headed vector. A name on such a target is the reader's to give
+                        ;; (the dialect's `[:catn [x T]]`), in the clauses it emits.
+                        (and authored? reader)
+                        {:label nil :target (if (seq? a)
+                                              (ref-arg->form a)
+                                              (value-form (:tag target-sdef) (reader a)))}
+
+                        (and (vector? a) (= 2 (count a)) (symbol? (first a)))
                         {:label (str (first a)) :target (arg->form (second a))}
-                        {:label nil :target (arg->form a)}))
+
+                        :else {:label nil :target (arg->form a)}))
          parsed     (mapv parse-elem args)]
      [(mapv :label parsed) (mapv :target parsed)])))
 
@@ -534,7 +549,7 @@
    §2.1 reader-slot exception: when a slot's target structure declares a `:reader`,
    data literals (symbol/vector/map, not inline `(Tag …)` seqs) in that slot are
    expanded via the reader at macroexpansion time and inlined as value-forms."
-  [tag name-expr doc value?-expr clauses]
+  [tag name-expr doc value?-expr clauses & [authored?]]
   (let [sdef    (structure-by-tag tag)
         _       (when-not sdef
                   (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
@@ -564,7 +579,7 @@
                             (throw (ex-info (str (clojure.core/name tag) ": `"
                                                  (clojure.core/name rk) "` is not a slot")
                                             {:tag tag :rel rk})))
-                          (let [[labels target-forms] (parse-clause-arg-forms (rest c) target-sdef)]
+                          (let [[labels target-forms] (parse-clause-arg-forms (rest c) target-sdef authored?)]
                             (rel-map-form rk (:card slot) target-forms labels))))
                       (remove scalar? clauses))]
     `(->InstanceValue ~tag ~name-expr ~doc ~scalars ~rels ~value?-expr)))
@@ -581,7 +596,8 @@
     (cond
       (and (= 1 (count body)) (map? (first body)))
       (build-instance-form tag nil nil true
-                           (map->clauses tag sdef (apply-syntax sdef (first body))))
+                           (map->clauses tag sdef (apply-syntax sdef (first body)))
+                           true)
 
       (and (= 1 (count body)) (:reader sdef) (reader-literal? (first body)))
       (build-instance-form tag nil nil true ((:reader sdef) (first body)))
@@ -735,7 +751,7 @@
                     (group-by #(route-slot sdef %))
                     (map (fn [[rel ks]] (cons (symbol (name rel)) (map :sym ks)))))
         clauses (concat (map->clauses tag sdef m) routed)
-        value   (build-instance-form tag (or (:name (meta sym)) (name sym)) doc false clauses)]
+        value   (build-instance-form tag (or (:name (meta sym)) (name sym)) doc false clauses true)]
     ;; forward-declare the nested syms so they may cross-reference each other (and the parent
     ;; reference them) in any authoring order — `(var X)` captures the var; its value is read
     ;; later, at assemble time, once every def has run.
