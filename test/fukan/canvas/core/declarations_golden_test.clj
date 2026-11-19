@@ -542,7 +542,10 @@
 ;; their DESCRIPTION, which goes silently green when the sentence is reworded and silent altogether
 ;; when a law is added. Counts unchanged; the laws hash moves because `:key` is part of the
 ;; snapshot's per-law tuple, which is the point — a key is now emission the golden guards.
-(def ^:private golden-laws  {:count 116 :hash -1461981474})
+;; 2026-11-19 (inline signatures): `Fn` gained `:signature-unread` — the mark on a function whose
+;; written signature a static read cannot take. Laws 116→117, the slot's generated type check;
+;; terms unchanged (a scalar slot emits no rule).
+(def ^:private golden-laws  {:count 117 :hash -1289894650})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

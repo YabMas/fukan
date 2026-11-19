@@ -33,6 +33,7 @@
   {:signature    [:? Schema]                     ; the whole function type, as the annotation wrote it
    :performs     [:* Effect]                     ; the effects it performs (extracted)
    :calls        [:* Fn]                         ; the ACTUAL call graph (calls+ is the compiler's)
+   :signature-unread [:? :boolean]               ; it WRITES a signature the dialect cannot read
    :private      [:? :boolean]                   ; public/internal — the module's surface
    :export       [:? :boolean]                   ; intentionally public for MECHANISM (^:export)
    :test-support [:? :boolean]}                  ; intentionally public for TEST-SUPPORT (^:test-support)
@@ -177,7 +178,45 @@
    not that it is uninteresting, but that it is not a SURFACE — nobody calls it by name — so it
    extracts as a sort of its OWN (`fukan.common.extraction.clojure.method/Method`), supplying a
    unit rather than defining one."
-  #{'clojure.core/defn 'clojure.core/defn- 'clojure.core/defmulti})
+  #{'clojure.core/defn 'clojure.core/defn- 'clojure.core/defmulti
+    ;; `malli.experimental/defn` — a function whose signature is written INLINE (`x :- T`).
+    ;; clj-kondo reports it only when told what it is like, and then under the name it was
+    ;; likened to: `schema.core/defn`, in the configuration malli itself ships and in the one
+    ;; the extractor passes. Until 2026-11-19 neither name was here, so every such function
+    ;; was absent from the model — 1,300 of them on the first codebase measured.
+    'malli.experimental/defn 'schema.core/defn})
+
+(defn- arity-signature
+  "One arity of an inline-annotated function as a malli arrow: `params` is its parameter vector,
+   `out` its result annotation (nil for none). `x :- T` is `T`, a bare `x` is `:any`; after `&`,
+   the annotation is already the repetition (`& xs :- [:* T]`), and a bare rest is `[:* :any]`."
+  [params out]
+  (loop [[p & more] (seq params), rest? false, ins []]
+    (cond
+      (nil? p) [:=> (into [:cat] ins) (if (nil? out) :any out)]
+      (= '& p) (recur more true ins)
+      (= :- (first more)) (recur (drop 2 more) rest? (conj ins (second more)))
+      :else (recur more rest? (conj ins (if rest? [:* :any] :any))))))
+
+(defn inline-signature
+  "The signature a `malli.experimental/defn` form writes inline, as the malli function type the
+   same function would carry on `:malli/schema` — an arrow, or `[:function …]` for several
+   arities — or nil when the form annotates NOTHING. An unannotated function has no signature;
+   one annotating any part has all of it, the rest being `:any`, which is what the macro itself
+   takes an absent annotation to mean."
+  [form]
+  (let [skip    (fn [xs] (drop-while #(or (string? %) (map? %)) xs))
+        more    (skip (drop 2 form))
+        [out more] (if (= :- (first more)) [(second more) (skip (drop 2 more))] [nil more])
+        arities (if (vector? (first more))
+                  [[(first more) out]]
+                  (for [a more :when (and (seq? a) (vector? (first a)))]
+                    [(first a) (when (= :- (second a)) (nth a 2 nil))]))
+        annotated? (or (some? out)
+                       (some (fn [[params o]] (or (some? o) (some #{:-} params))) arities))]
+    (when (and annotated? (seq arities))
+      (let [arrows (mapv (fn [[params o]] (arity-signature params o)) arities)]
+        (if (= 1 (count arrows)) (first arrows) (into [:function] arrows))))))
 
 (defn extract-operation
   "Build an extracted `Fn` InstanceValue (the fact twin of a design Operation) from a clj-kondo
@@ -186,15 +225,29 @@
    assembler like an authored ref). When `v` carries a `:malli/schema` function-type, the signature is
    DECOMPOSED into `:in`/`:out` Schema subgraphs (symmetric with the design side), built through the type
    dialect via `s/value-literal->iv` — the queryable form the adherence comparator reads. The function's
-   own natural-key id (`\"ns/op\"`) is the root id the caller assigns."
-  [v effs call-ids]
-  (let [sig     (:malli/schema (:meta v))
+   own natural-key id (`\"ns/op\"`) is the root id the caller assigns.
+
+   `inline-sig` is the signature the function's own FORM writes inline (`inline-signature`), for a
+   definition clj-kondo's metadata cannot carry one for. An explicit `:malli/schema` wins."
+  [v effs call-ids inline-sig]
+  (let [sig     (or (:malli/schema (:meta v)) inline-sig)
         ;; `:=>` is one arity, `:function` several — both are function types and both are stored
         ;; whole. Anything else on `:malli/schema` (a project annotating a non-function value) is
         ;; not a signature and is left alone.
-        fn-sig? (and (vector? sig) (#{:=> :function} (first sig)))]
+        fn-sig? (and (vector? sig) (#{:=> :function} (first sig)))
+        ;; An annotation is an EXPRESSION, and a static read sees only the ones that are data:
+        ;; `(mu/dissoc Claim :held)` is a schema to malli and a list to this reader, and the
+        ;; dialect covers a part of malli, not all of it. Such a signature is not stored — a
+        ;; guessed one would be compared against the design as if it were what the code says —
+        ;; and the function is MARKED, so what could not be read is a fact, not an absence.
+        sig-iv  (when fn-sig?
+                  (try (s/value-literal->iv schema-tag sig)
+                       (catch clojure.lang.ExceptionInfo _ nil)))
+        unread? (and fn-sig? (nil? sig-iv))
+        fn-sig? (some? sig-iv)]
     (sub/->InstanceValue ::Fn (str (:name v)) nil
                          (cond-> {:val/private (boolean (:private v))}
+                           unread?                   (assoc :val/signature-unread true)
                            (:export (:meta v))       (assoc :val/export true)
                            (:test-support (:meta v)) (assoc :val/test-support true))
                          (cond-> []
@@ -202,7 +255,7 @@
                                                  :targets (mapv #(s/value-literal->iv effect-tag %)
                                                                 (sort effs))})
                            fn-sig?        (conj {:rk :signature :card :optional
-                                                 :targets [(s/value-literal->iv schema-tag sig)]})
+                                                 :targets [sig-iv]})
                            (seq call-ids) (conj {:rk :calls :card :many
                                                  :targets (mapv sub/->Ref call-ids)}))
                          false)))
