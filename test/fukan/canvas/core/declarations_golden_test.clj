@@ -539,7 +539,14 @@
 ;; 2026-11-19 (the one way to declare a domain): the Lexicon producer reads value shapes — a
 ;; `Value` sort beside `Entity`, and `:embeds` from the attribute nesting one. Terms 263→267 (+4:
 ;; the sort's kind rule, `embeds` and its closure, and `attribute` gaining a second source).
-(def ^:private golden-terms {:count 267 :hash 252941857})
+;; 2026-11-19 (the dialect reads all of malli): terms 267→281 (+14). `Schema :entry` — the
+;; ordered entries of `:orn`/`:altn`/`:catn`/`:andn`/`:multi` — is a slot rule and its closure
+;; (+3); `schema-part`, what a schema is made of whatever slot the part sits in, is five bodies
+;; and its closure (+7); `arrow` gained a body (`[:-> …]` is an arrow too, +1), `arrow-differs`
+;; two (a guard is part of what a function accepts, +2), and `signature-differs` trades its
+;; kind-inequality body for the two that say "one arity against several" (+1). `speaks-of`
+;; keeps its four bodies and reads `schema-part+` where it read `of+`, so the hash moves there.
+(def ^:private golden-terms {:count 281 :hash -841031858})
 ;; 2026-09-22 (later still): every authored law in the shipped vocabulary carries a stable `:key`
 ;; — Region, Band, Subsystem, Stratum, Kind and the malli dialect were reachable only by matching
 ;; their DESCRIPTION, which goes silently green when the sentence is reworded and silent altogether
@@ -550,7 +557,10 @@
 ;; terms unchanged (a scalar slot emits no rule).
 ;; 2026-11-19 (the one way to declare a domain): laws 117→119, the target-type checks the two
 ;; new slots (`Value :attribute`, `Attribute :embeds`) generate.
-(def ^:private golden-laws  {:count 119 :hash -1970206458})
+;; 2026-11-19 (the dialect reads all of malli): laws 119→122, all generated — the target-type
+;; check of `Schema :entry` and the type checks of the two `:props` leaves (`Schema`,
+;; `SchemaField`). The hash also moves on `SchemaChoice :kind`, whose enum gained "edn".
+(def ^:private golden-laws  {:count 122 :hash 578324320})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

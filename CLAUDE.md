@@ -296,6 +296,36 @@ SPECIALIZED vocabulary + its mechanism together, not scattered into general voca
   `^:value` structures — + the authoring readers), the runtime BRIDGES (`render`/`valid?`), and the
   dialect wiring. The HOOK side of the `typing` SPI; requiring it self-registers the full dialect at load.
   `common/fukan/common/typing/` is the dialect AREA (room for a sibling realization if one ever appears).
+  **It reads ALL of malli (2026-11-19).** One table, `op-shapes`, holds malli's whole vocabulary by the
+  SHAPE of what follows the head — a leaf, one child schema, several, keyed ENTRIES (`:map`'s unordered
+  in `:field`; `:orn`/`:altn`/`:catn`/`:andn`/`:multi`'s ordered in `:entry`), literal VALUES
+  (`:enum`, the comparators, a `:fn` body — all `SchemaChoice`s), an arrow (`:=>` with its guard, the
+  flat `:->`) — so covering a schema is one line there and nothing anywhere else. The predicate schemas
+  (`int?` …) are taken from the library itself. `test/fukan/common/typing/coverage_test.clj` enumerates
+  malli's registries AT TEST TIME against `covers?`, so a builtin malli gains fails the build instead
+  of reading as a reference to a type nobody modelled — which is what `:qualified-keyword` did, reported
+  by `:typing/reference-unresolved`, and what started this. Rules that hold:
+  - THE KEYWORD PARTITION: an unqualified keyword malli knows is that schema; any other bare keyword, a
+    bare non-predicate symbol or a string is a reference by name; a QUALIFIED keyword is ALWAYS a
+    reference by its whole name. That is safe because every type malli registers by default is
+    unqualified (a test holds it; the one exception, `:malli.core/schema`, is only ever a form's head).
+    ⚠ The opt-in `malli.experimental.time` types (`:time/instant` …) ARE qualified, so they read as
+    references — deliberately: the namespace is the domain's, and guessing would break the one way.
+  - WHAT IS NOT A CHILD SCHEMA IS STORED AS TEXT, opaque but faithful: property maps (`:min`/`:max`
+    stay integer leaves, a map entry's `:optional` a boolean; the rest is one `:props` leaf in a
+    canonical key order), literal values, a `(fn …)` body, a local `:registry`. Part of identity,
+    rendered back as written. ⚠ So a documentation property (`:title`) written on one side of a
+    signature and not the other is a disagreement — properties are not ignored the way parameter names are.
+  - WHAT IS NOT DATA IS REFUSED, never guessed: a function OBJECT, a computed schema
+    (`(mu/dissoc Claim :held)`). The extractor marks `:signature-unread`; an authored instance throws.
+  - A name bound by a local `:registry` is a LOCAL reference (kind `local`), not held to resolve.
+  - `schema-part` is what a schema is made of whatever slot the part sits in (child, entry, parameter,
+    result); walk with `schema-part+`, not `of+`, which stops at a map.
+  - `render` returns the form it was given except for the normalisations its docstring lists (a
+    reference as a keyword, map fields in key order, an arrow's input as `[:cat …]`, …) — each the
+    same schema in malli; the coverage test checks the rendering is still valid malli and a fixpoint.
+  - ⚠ A predicate carrying properties directly AS A SLOT'S VALUE (`{:shape [int? {:min 1}]}`) is taken
+    by the instance syntax for a `[label target]` pair and fails to read; nested anywhere it is fine.
 - `common/fukan/common/extraction/` (ns `fukan.common.extraction.*`) — the Clojure EXTRACTION SEAM: `core.clj`
   (orchestration: clj-kondo `analyze` + `op-eid`, calling each element's builder) +
   `clojure/{effect,module,operation}.clj` (the per-element extraction builders). Mints no structures;
@@ -378,18 +408,19 @@ brian's 529 unresolved names would resolve.) What made it work, and what is stil
   not merely unsigned, it was ABSENT: clj-kondo reports no var for a macro it does not know,
   and when told (`:lint-as`, which the extractor passes itself) it reports `:defined-by
   schema.core/defn`, which `fn-defining` did not hold. ⚠ An annotation is an EXPRESSION and a
-  static read takes only the ones that are data: `(mu/dissoc Claim :held)`, or a malli op the
-  dialect does not cover, is not stored and not guessed — the function is marked
-  `:signature-unread`. That holds for `:malli/schema` too, which used to THROW. In the one way
-  no signature is an expression: every name is a keyword.
+  static read takes only the ones that are data: `(mu/dissoc Claim :held)` is not stored and
+  not guessed — the function is marked `:signature-unread`. (Every malli schema type that is
+  WRITTEN is read since 2026-11-19; what stays unread is what is computed.) That holds for
+  `:malli/schema` too, which used to THROW. In the one way no signature is an expression:
+  every name is a keyword.
 - THE WORDS ARE INSTALLED BY LEXICON (`lexicon.install`, its second namespace): Malli builds a
   function schema when the function is DEFINED, so the words must be in Malli's default
   registry by then. `(install/vocabulary! …)` where the vocabulary is declared,
   `(install/views! (lexicon/views …))` before a namespace's first function; `lexicon.core`
   stays pure and the producer still recognises its calls inside those.
-- ⚠ Not yet: the dialect covers a subset of Malli's builtins (`:qualified-keyword` reads as an
-  unresolved reference); `speaks-of` follows collections and unions but not a `[:map …]`'s
-  fields; nothing checks a view's namespace against the Module declaring it, nor a design
+- `speaks-of` follows every part of a schema — a map's fields and an `:orn` branch as much as a
+  collection's element — through the dialect's `schema-part` (2026-11-19).
+- ⚠ Not yet: nothing checks a view's namespace against the Module declaring it, nor a design
   Operation's claim against its function's footprint; brian and nido are not ported.
 
 **BRIDGES AND PLANES (2026-11-17).** A correspondence is a statement about two PLANES of the one

@@ -229,7 +229,7 @@
    `{:full? true}` keeps whole docstrings — the difference between a reference card, which is
    what the REPL primer wants, and a design document, which is what a reader arriving at the
    project wants. `opts` is required rather than an arity, so the modelled signature is one
-   signature: the type dialect has no `:maybe`, and a fn with two shapes has two."
+   signature: a fn with two shapes has two."
   [db vocab-name {:keys [full?]}]
   (let [members (->> (cq/q '[:find ?c ?n :in $ ?vn
                              :where (is ?v ::reflect/Vocabulary)

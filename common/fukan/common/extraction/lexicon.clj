@@ -148,12 +148,13 @@
 
 (defrelation :speaks-of
   "Schema ?sch is about attribute ?a: it names it, names a view selecting it, or is built —
-   a collection, an optional, a union, at any depth — from a schema that does."
+   a collection, an optional, a union, a map's field, a function's parameter: any part, at
+   any depth (the dialect's `schema-part`) — from a schema that does."
   [?sch ?a]
   [(names-type ?sch ?a) (is ?a ::Attribute)]
   [(names-type ?sch ?v) (selects ?v ?a)]
-  [(of+ ?sch ?c) (names-type ?c ?a) (is ?a ::Attribute)]
-  [(of+ ?sch ?c) (names-type ?c ?v) (selects ?v ?a)])
+  [(schema-part+ ?sch ?c) (names-type ?c ?a) (is ?a ::Attribute)]
+  [(schema-part+ ?sch ?c) (names-type ?c ?v) (selects ?v ?a)])
 
 (defrelation :takes-attribute
   "?x's signature takes attribute ?a, at some parameter."
