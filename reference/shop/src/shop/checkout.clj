@@ -2,11 +2,12 @@
   "Taking an order and showing what was bought."
   (:require [clojure.string :as str]
             [lexicon.core :as lexicon]
+            [lexicon.install :as install]
             [malli.experimental :as mx]
             [shop.domain :as domain]
             [shop.store :as store]))
 
-(domain/install!
+(install/views!
  (lexicon/views domain/vocabulary
                 {:checkout/receipt   [:order/id :order/total :customer/name]
                  :checkout/placement [:order/id :order/customer :order/total]

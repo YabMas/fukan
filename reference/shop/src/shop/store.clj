@@ -2,8 +2,9 @@
   "Where the shop's facts are kept: in memory, by entity and id. It reads what a view asks for
    and nothing else. Lexicon declares and never evaluates; this is the evaluating."
   (:require [lexicon.core :as lexicon]
+            [lexicon.install :as install]
             [malli.experimental :as mx]
-            [shop.domain :as domain]))
+            [shop.domain]))
 
 (defonce ^:private facts (atom {}))
 
@@ -17,7 +18,7 @@
   "The entity with `id`, as the view named `view` selects it: its own attributes, and those
    of another entity reached through its one reference to it."
   [view :- :keyword, id :- :int]
-  (let [v    (domain/view view)
+  (let [v    (install/view view)
         root (lexicon/root-of v)]
     (when-let [row (get-in @facts [root id])]
       (into {}
