@@ -43,7 +43,11 @@
   [paths]
   (let [{:keys [analysis findings]}
         (kondo/run! {:lint (vec paths)
-                     :config {:output {:analysis {:var-definitions {:meta true}
+                     ;; `malli.experimental/defn` is a macro clj-kondo does not know defines a
+                     ;; var: unless a project's own configuration says so, every function written
+                     ;; with it is missing from the analysis. Said here, it never depends on that.
+                     :config {:lint-as '{malli.experimental/defn schema.core/defn}
+                              :output {:analysis {:var-definitions {:meta true}
                                                   :var-usages true}}}})
         unreadable (filter #(= :syntax (:type %)) findings)]
     (when (seq unreadable)
@@ -293,6 +297,33 @@
               :surface  sid
               :dispatch (:dispatch-val-str m)}])))
 
+(defn- inline-signatures
+  "`[ns-string name-string]` → the signature written inline in the function's own form, for
+   every var definition in `vdefs` that clj-kondo reports as likened to `schema.core/defn` and
+   whose form is in fact a `malli.experimental` one. Only files holding such a definition are
+   read. The head is checked against the file's own require of `malli.experimental`: plumatic
+   schema's `defn` writes `:-` too, and its annotations are not malli."
+  [vdefs]
+  (into {}
+        (for [[file vs] (group-by :filename (filter #(= 'schema.core/defn (:defined-by %)) vdefs))
+              :let [forms (read-forms file)]
+              :when forms
+              :let [alias (->> (tree-seq coll? seq (some #(when (and (seq? %) (= 'ns (first %))) %) forms))
+                               (some #(when (and (vector? %) (= 'malli.experimental (first %)))
+                                        (:as (apply hash-map (rest %))))))
+                    heads (cond-> #{"malli.experimental"} alias (conj (str alias)))
+                    at    (into {} (for [f (tree-seq coll? seq forms)
+                                         :when (and (seq? f) (:line (meta f)))]
+                                     [[(:line (meta f)) (:column (meta f))] f]))]
+              v vs
+              :let [form (at [(:row v) (:col v)])
+                    head (first form)
+                    sig  (when (and (symbol? head) (heads (namespace head))
+                                    (= "defn" (name head)))
+                           (clj-operation/inline-signature form))]
+              :when sig]
+          [[(str (:ns v)) (str (:name v))] sig])))
+
 (defn extract-roots
   "The engine-agnostic extraction FACTS over the Clojure source under `paths`: `{:roots [[id
    InstanceValue]…]}`. Every extracted entity is a FLAT root with a natural-key id — `\"ns\"` for a
@@ -313,6 +344,7 @@
         module-names (distinct (concat (map :name namespace-definitions)
                                        (keys ops-by-ns)))
         op-effs      (clj-effect/op-effects var-usages)
+        inline-sigs  (inline-signatures var-definitions)
         op-id        (fn [mname nm] (str mname "/" nm))
         by-key       (into {} (for [[mname vs] ops-by-ns, v vs]
                                 [[(str mname) (str (:name v))] (op-id mname (:name v))]))
@@ -326,7 +358,9 @@
                            :let [op-roots (for [v (ops-by-ns mname)
                                                 :let [oid  (op-id mname (:name v))
                                                       effs (get op-effs [(str mname) (str (:name v))])]]
-                                            [oid (clj-operation/extract-operation v effs (get calls oid))])
+                                            [oid (clj-operation/extract-operation
+                                                  v effs (get calls oid)
+                                                  (get inline-sigs [(str mname) (str (:name v))]))])
                                  sat-roots (for [{:keys [id surface dispatch]} (sats-by-ns (str mname))]
                                              [id (clj-method/extract-method
                                                   id surface dispatch (get calls id))])

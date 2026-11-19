@@ -355,10 +355,23 @@ made it work:
   in the model. A local shadowing a view's var reads as the view.
 - Lexicon itself (2026-11-19) offers `lexicon/registry`: the vocabulary's attributes as a Malli
   registry, so `[:=> [:cat :order/id] Receipt]` is a real schema at runtime too.
+- INLINE SIGNATURES (2026-11-19): a `malli.experimental/defn` writes its signature inline
+  (`x :- T`), and the extractor reads it off the function's own form into the arrow the same
+  function would carry on `:malli/schema` (`clojure/operation.clj` `inline-signature`; an
+  explicit `:malli/schema` wins; annotating nothing is no signature). ⚠⚠ Before this such a
+  function was not merely unsigned, it was ABSENT: clj-kondo reports no var for a macro it does
+  not know, and when told (`:lint-as`, which malli ships and the extractor now passes itself) it
+  reports `:defined-by schema.core/defn`, which `fn-defining` did not hold. On brian that was
+  1,299 of 28,031 functions missing with nothing saying so; 1,244 now carry a signature.
+  ⚠ An annotation is an EXPRESSION and a static read takes only the ones that are data:
+  `(mu/dissoc Claim :held)`, or a malli op the dialect does not cover, is not stored and not
+  guessed — the function is marked `:signature-unread` (54 on brian). That holds for
+  `:malli/schema` too, which used to THROW and stop the build.
 - ⚠ Not yet: resolution is by SHORT name (two views called `Summary` both answer); `speaks-of`
-  follows collections and unions but not a `[:map …]`'s fields; only `:malli/schema` metadata is
-  extracted, not an `mx/defn`'s inline `:-`; and nothing yet checks a
-  design Operation's claim against its function's footprint.
+  follows collections and unions but not a `[:map …]`'s fields; a schema a project names with a
+  plain `(def Claim [:map …])` is no `NamedType`, so a signature naming it is an unresolved
+  reference (529 distinct names on brian — the next thing an adopter of typed signatures
+  meets); and nothing yet checks a design Operation's claim against its function's footprint.
 
 **BRIDGES AND PLANES (2026-11-17).** A correspondence is a statement about two PLANES of the one
 graph, and nothing in its lowering is about code: a pairing rule over two sort tags, a
