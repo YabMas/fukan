@@ -302,76 +302,94 @@ SPECIALIZED vocabulary + its mechanism together, not scattered into general voca
   the HOOK for the extraction plug-point; the composition root registers `extract-roots`.
 
 - `common/fukan/common/extraction/lexicon.clj` (ns `fukan.common.extraction.lexicon`) — the LEXICON
-  PRODUCER (2026-11-17): a project's DOMAIN vocabulary read out of its source. Lexicon is a library
-  a project declares its domain in (entities as Malli maps with `:lexicon/*` properties; VIEWS, the
+  PRODUCER: a project's DOMAIN vocabulary read out of its source. Lexicon is a library a project
+  declares its domain in (shapes as Malli maps with `:lexicon/*` properties; VIEWS, the
   attributes one use requires). The producer reads those declarations AS FORMS — nothing of the
-  adopter's is loaded — into three fact sorts: `Entity` (`:attribute`, and `:part` for the entities
-  it contains), `Attribute` (`:kind` stored/ref/many/derived, `:refers-to`), `View` (`:selects`,
-  `:declared-in` an `Ns`). Facts only, no laws of its own (THE TEST: a model producer adds facts).
+  adopter's is loaded — into fact sorts: `Entity` (`:attribute`, and `:part` for the entities it
+  contains), `Value` (a shape with no identity), `Attribute` (`:kind` stored/ref/many/derived,
+  `:refers-to`, `:embeds` the value shapes its schema nests), `View` (`:selects`, `:declared-in`
+  an `Ns`) and `ViewUse`. Facts only, no laws of its own (THE TEST: a model producer adds facts).
   The derived relations `entity-references`/`view-reads`/`ns-reads` and the readings
-  `domain-map`/`context-map`/`attribute-readers` are its consumers. ⚠ A use is read from a declared
-  VIEW and nowhere else: matching vocabulary keywords across a codebase was measured on brian and
-  is wrong (1,234 of 1,977 mentions sat in namespaces that never use Lexicon — older code whose
-  keys coincide). Inside a view the keyword IS the attribute; elsewhere it is a guess. ⚠ It must be
-  TOLD where to look — bind `*sources*` (`{:vocabulary [ns-prefix…] :view #{maker-symbol…}}`):
-  an entity is a `[:map …]` in a `def` like every other schema, and the view maker is usually the
-  adopter's own closure over its vocabulary. Unbound, it reads nothing. The composition root merges
-  its roots with the Clojure extractor's (a view points at its namespace by name), each under its
-  own PLANE label (`"code"`, `"domain"` — see BRIDGES AND PLANES below). NOT wired into the cockpit
-  or `fukan.cli` yet, and the explorer still draws authored nodes only, so it does not draw the
-  domain plane.
+  `domain-map`/`context-map`/`attribute-readers` are its consumers. ⚠ NOTHING IS CONFIGURED
+  (since 2026-11-19; `*sources*` is gone): there is ONE way to declare a vocabulary —
+  `(lexicon.core/vocabulary [Shape …])` over a literal vector — and ONE way to name a view —
+  `(lexicon.core/views vocab {:checkout/receipt [selection] …})` over a literal map — and both
+  are calls of the library, recognised through the file's `ns` form. A project wrapping the
+  library in makers of its own is read as declaring NOTHING: that is its porting distance, not
+  a case to accommodate (the configured reading existed to fit one adopter's closure). What it
+  recognises but cannot read as a literal THROWS. ⚠ An attribute's use is read from a declared
+  VIEW and nowhere else: matching vocabulary keywords across a codebase was measured on brian
+  and is wrong (1,234 of 1,977 mentions sat in namespaces that never use Lexicon). The
+  composition root merges its roots with the Clojure extractor's, each under its own PLANE
+  label (`"code"`, `"domain"` — see BRIDGES AND PLANES below). The explorer still draws
+  authored nodes only, so it does not draw the domain plane.
 
-**SIGNATURES IN THE DOMAIN'S LANGUAGE (2026-11-17).** One expression language for the shapes
-that flow through a system, used at three altitudes: the domain declares it (Lexicon), a design
-`Operation`'s `:signature` is written in it, and so is the code's `:malli/schema`. A signature
-names an ATTRIBUTE where one value passes (`:order/id`) and a VIEW where a shape does
-(`Receipt`) — `[:=> [:cat :order/id] Receipt]`, spelled alike on both sides, so the ordinary
-`:correspondence/signature-disagrees` law compares them with no law of the domain's own. What
-made it work:
+**THE ONE WAY, AND ITS REFERENCE (`reference/shop`, 2026-11-19).** One expression language for
+the shapes that flow through a system, used at three altitudes: the domain declares it
+(Lexicon), a design `Operation`'s `:signature` is written in it, and so is the code's. EVERY
+name in a signature is a QUALIFIED KEYWORD, and the keyword is the whole identity: an
+ATTRIBUTE where one value passes (`:order/id` — its namespace is its entity or value shape), a
+VIEW where a shape does (`:checkout/receipt` — its namespace is the use taking it, never a
+shape's; Lexicon refuses that). `[:=> [:cat :order/id] :checkout/receipt]` is pure data: the
+design writes it without requiring any code, the code writes it inline (`mx/defn`), Malli
+resolves it at runtime through `lexicon/registry`, and the ordinary
+`:correspondence/signature-disagrees` law compares the two with no law of the domain's own.
+`reference/shop` is that, whole and small: a real project (own `deps.edn`; `clojure -M:test`
+runs it with every signature enforced, `clojure -M:fukan -m fukan.cli check --src src
+--spec-dirs design` checks it with no configuration), and `fukan.reference-shop-test` holds
+that fukan finds nothing wrong in it and that the green is not vacuous. ⚠ THE STANDING STEER
+(user, 2026-11-19): establish one thought-out way and PORT projects to it; do not grow fukan to
+make an adopter's existing structures sort-of work. An adopter's findings are its porting
+distance. (The proposal this refused: treating any `(def Foo [:map …])` as a named type so
+brian's 529 unresolved names would resolve.) What made it work, and what is still open:
 - A type-reference resolves to a `NamedType` — a GENUS in the dialect (`typing/malli.clj`), no
   slots, no instances. `Kind` is a species; so are the Lexicon producer's `View` and `Attribute`.
   The dialect never learns which sorts those are, so the code grammar takes no dependency on
   Lexicon: the producer depends on the dialect. `names-type` is the general resolution,
-  `names-kind` the same narrowed to Kinds. Kind and View both stand for now — a Kind for a shape
-  that is no part of the domain (a db handle), a view for one that is.
-- A QUALIFIED keyword in a schema is a reference by its WHOLE name (`order/id`). It used to keep
-  only the name part, which made every entity's `id` one type.
+  `names-kind` the same narrowed to Kinds. ⚠ `Kind` is left to SHRINK as the Lexicon story is
+  worked out — it may disappear or find a genuine place (a shape that is no part of the domain:
+  a db handle); do not grow it, and do not remove it either.
+- SHORT-NAME RESOLUTION IS GONE for views: a view used to be named by the var holding it, which
+  means something only where the var is in scope — a design cannot require the code, so two
+  views called `Summary` were one name. A view with no name (`lexicon.core/view` held in a var)
+  is not in the model. A VALUE SHAPE needs no name of its own in a signature: it passes under
+  the attribute embedding it (`:customer/address`) or a view rooted at it.
 - The dialect tells `signature-in` from `signature-out`; the producer's `speaks-of`,
   `takes-attribute`, `gives-attribute` and `hands-to` read a signature in the domain's terms, for
   an Operation and a function alike. ⚠ A shipped relation name is GLOBAL: the first spelling,
   `:takes`/`:gives`, collided with a consumer's slot of that name and threw at registration.
-- WHAT A FUNCTION ACTUALLY READS (2026-11-19) is a third thing, beside where a view is declared
-  and what a signature says: the producer emits a `ViewUse` per function naming a view in its
-  BODY (a view named in the attribute map, the parameters or an inline `:-` is the signature
-  speaking, and is not a use). `fn-uses` → `fn-reads` → `reaches-entity` (itself, or through
-  what it calls) is a function's FOOTPRINT; `lx/footprint` reads it by namespace, and
+- WHAT A FUNCTION ACTUALLY READS is a third thing, beside where a view is declared and what a
+  signature says: the producer emits a `ViewUse` per function mentioning a view's NAME in its
+  BODY (a name in the attribute map, the parameters or an inline `:-` is the signature
+  speaking, and is not a use). A view's name is no key of any data, which is why a mention of
+  it can be read where an attribute's cannot. `fn-uses` → `fn-reads` → `reaches-entity` (itself,
+  or through what it calls) is a function's FOOTPRINT; `lx/footprint` reads it by namespace, and
   `lx/unread-claims` lists functions whose signature gives an attribute of an entity they
-  neither reach nor are handed anything of. Readings, not laws. On brian: 105 uses, 999
-  functions reaching an entity, 451 namespace×entity pairs against the 66 `context-map` sees.
+  neither reach nor are handed anything of. Readings, not laws.
   ⚠ `reaches-entity`'s step body LEADS WITH THE RECURSIVE CALL — walking callers backward from
-  the ~100 functions that read anything: 0.2s. Written forward (`calls+` then `fn-reads`) it
-  closed the whole call graph first: 17s for the same 1,627 rows. ⚠ A `ViewUse` holds its
-  function by namespace + NAME, not by reference: what source calls a function need not be one
-  in the model. A local shadowing a view's var reads as the view.
-- Lexicon itself (2026-11-19) offers `lexicon/registry`: the vocabulary's attributes as a Malli
-  registry, so `[:=> [:cat :order/id] Receipt]` is a real schema at runtime too.
-- INLINE SIGNATURES (2026-11-19): a `malli.experimental/defn` writes its signature inline
-  (`x :- T`), and the extractor reads it off the function's own form into the arrow the same
-  function would carry on `:malli/schema` (`clojure/operation.clj` `inline-signature`; an
-  explicit `:malli/schema` wins; annotating nothing is no signature). ⚠⚠ Before this such a
-  function was not merely unsigned, it was ABSENT: clj-kondo reports no var for a macro it does
-  not know, and when told (`:lint-as`, which malli ships and the extractor now passes itself) it
-  reports `:defined-by schema.core/defn`, which `fn-defining` did not hold. On brian that was
-  1,299 of 28,031 functions missing with nothing saying so; 1,244 now carry a signature.
-  ⚠ An annotation is an EXPRESSION and a static read takes only the ones that are data:
-  `(mu/dissoc Claim :held)`, or a malli op the dialect does not cover, is not stored and not
-  guessed — the function is marked `:signature-unread` (54 on brian). That holds for
-  `:malli/schema` too, which used to THROW and stop the build.
-- ⚠ Not yet: resolution is by SHORT name (two views called `Summary` both answer); `speaks-of`
-  follows collections and unions but not a `[:map …]`'s fields; a schema a project names with a
-  plain `(def Claim [:map …])` is no `NamedType`, so a signature naming it is an unresolved
-  reference (529 distinct names on brian — the next thing an adopter of typed signatures
-  meets); and nothing yet checks a design Operation's claim against its function's footprint.
+  the few functions that read anything: 0.2s on brian. Written forward (`calls+` then
+  `fn-reads`) it closed the whole call graph first: 17s for the same rows. ⚠ A `ViewUse` holds
+  its function by namespace + NAME, not by reference: what source calls a function need not be
+  one in the model.
+- INLINE SIGNATURES: a `malli.experimental/defn` writes its signature inline (`x :- T`), and
+  the extractor reads it off the function's own form into the arrow the same function would
+  carry on `:malli/schema` (`clojure/operation.clj` `inline-signature`; an explicit
+  `:malli/schema` wins; annotating nothing is no signature). ⚠⚠ Before this such a function was
+  not merely unsigned, it was ABSENT: clj-kondo reports no var for a macro it does not know,
+  and when told (`:lint-as`, which the extractor passes itself) it reports `:defined-by
+  schema.core/defn`, which `fn-defining` did not hold. ⚠ An annotation is an EXPRESSION and a
+  static read takes only the ones that are data: `(mu/dissoc Claim :held)`, or a malli op the
+  dialect does not cover, is not stored and not guessed — the function is marked
+  `:signature-unread`. That holds for `:malli/schema` too, which used to THROW. In the one way
+  no signature is an expression: every name is a keyword.
+- ⚠ The project still installs the registry itself (`shop.domain`: a mutable Malli registry and
+  an `install!` each view-declaring namespace calls — Malli builds a function schema when the
+  function is DEFINED, so the words must resolve by then). Six lines every adopter would copy;
+  where they belong (Lexicon declares and installs nothing) is open.
+- ⚠ Not yet: the dialect covers a subset of Malli's builtins (`:qualified-keyword` reads as an
+  unresolved reference); `speaks-of` follows collections and unions but not a `[:map …]`'s
+  fields; nothing checks a view's namespace against the Module declaring it, nor a design
+  Operation's claim against its function's footprint; brian and nido are not ported.
 
 **BRIDGES AND PLANES (2026-11-17).** A correspondence is a statement about two PLANES of the one
 graph, and nothing in its lowering is about code: a pairing rule over two sort tags, a

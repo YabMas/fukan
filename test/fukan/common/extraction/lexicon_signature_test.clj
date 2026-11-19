@@ -17,28 +17,27 @@
 (Module checkout "The fixture's `shop.app.checkout`, as designed."
   (Kind Clock "A named shape that is no part of the domain: a Kind still names it.")
   (Operation receipt "An order, as a receipt."
-    {:signature [:=> [:cat :order/id] Receipt]})
+    {:signature [:=> [:cat :order/id] :checkout/receipt]})
   (Operation place "A customer places an order for some products."
-    {:signature [:=> [:cat :customer/id [:vector :line/product]] Placement]})
-  (Operation label "WRONG ON PURPOSE: the design says a label is a Receipt; the code gives a Label."
-    {:signature [:=> [:cat :customer/id] Receipt]})
+    {:signature [:=> [:cat :customer/id [:vector :line/product]] :checkout/placement]})
+  (Operation label "WRONG ON PURPOSE: the design says a label is a receipt; the code gives a label."
+    {:signature [:=> [:cat :customer/id] :checkout/receipt]})
   (Operation render "A receipt, as text."
-    {:signature [:=> [:cat Receipt] :string]})
+    {:signature [:=> [:cat :checkout/receipt] :string]})
   (Operation print-receipt "An order's receipt, as text."
     {:signature [:=> [:cat :order/id] :string]
      :delegates [receipt render]})
   (Operation stamp "Names a Kind, a view nobody declared and an attribute the vocabulary lacks."
-    {:signature [:=> [:cat Clock Missing] :order/colour]}))
+    {:signature [:=> [:cat Clock :checkout/missing] :order/colour]}))
 
 (def ^:private design :fukan.common.vocab.code.operation/Operation)
 (def ^:private code   :fukan.common.extraction.clojure.operation/Fn)
 
 (defn- model []
-  (binding [lx/*sources* '{:vocabulary ["shop.domain.lexicon"] :view #{shop.domain.lexicon/view}}]
-    (let [p ["test/fixtures/lexicon" "test/fixtures/lexicon_signatures"]]   ; the vocabulary, and code speaking it
-      (build/model->cozo ['fukan.common.extraction.lexicon-signature-test]
-                         {:planes {"code"   (:roots (tc/extract-roots p))
-                                   "domain" (:roots (lx/extract-roots p))}}))))
+  (let [p ["test/fixtures/lexicon" "test/fixtures/lexicon_signatures"]]   ; the vocabulary, and code speaking it
+    (build/model->cozo ['fukan.common.extraction.lexicon-signature-test]
+                       {:planes {"code"   (:roots (tc/extract-roots p))
+                                 "domain" (:roots (lx/extract-roots p))}})))
 
 (defn- found [db k] (filter #(= k (:key %)) (law/check db)))
 
@@ -71,7 +70,7 @@
                                   :where (is ?x ?t) (is ?y ?t) (hands-to ?x ?v ?y)
                                   [?x :entity/name ?xn] [?v :entity/name ?vn] [?y :entity/name ?yn]]
                                 db (s/vocab-rules) code))
-                     ["receipt" "Receipt" "render"])))))
+                     ["receipt" "checkout/receipt" "render"])))))
 
 (deftest a-disagreement-is-reported-in-the-domains-terms
   (let [db (model)]
@@ -87,27 +86,25 @@
 (deftest a-reference-resolves-to-a-kind-a-view-or-an-attribute-and-to-nothing-else
   (let [unresolved (->> (found (model) :typing/reference-unresolved)
                         (mapcat :offenders) (map first) set)]
-    (is (= #{"Missing" "order/colour"} unresolved))))
+    (is (= #{"checkout/missing" "order/colour"} unresolved))))
 
 (deftest a-function-reaches-what-it-reads-through-what-it-calls
   (let [db    (model)
         reach (fn [rel] (set (cq/q (list :find '?fn '?en :in '$ '% :where (list rel '?f '?e)
                                          '[?f :entity/name ?fn] '[?e :entity/name ?en])
                                    db (s/vocab-rules))))]
-    (testing "one function names the view in its body — a signature naming it is not a use"
-      (is (= #{["load-receipt" "order"] ["load-receipt" "customer"]}
-             (disj (reach 'fn-reads) ["pair" "customer"]))))
-    (testing "its callers reach the same entities, at any depth"
+    (testing "a function names the view in its body — a signature naming it is not a use"
+      (is (= #{["load-receipt" "order"] ["load-receipt" "customer"] ["home" "address"]}
+             (reach 'fn-reads))))
+    (testing "its callers reach the same shapes, at any depth"
       (is (= #{["load-receipt" "order"] ["load-receipt" "customer"]
                ["receipt" "order"] ["receipt" "customer"]
-               ["print-receipt" "order"] ["print-receipt" "customer"]}
-             (disj (reach 'reaches-entity) ["pair" "customer"]))))
-    (testing "a function declaring a view inline uses it"
-      (is (contains? (reach 'fn-reads) ["pair" "customer"])
-          "from the vocabulary fixture's `shop.domain.orders/pair`")
-      (is (contains? (lx/footprint db) ["shop.domain.orders" "customer"])))
+               ["print-receipt" "order"] ["print-receipt" "customer"]
+               ["home" "address"]}
+             (reach 'reaches-entity))))
     (testing "by namespace: how far the domain's words travel"
-      (is (contains? (lx/footprint db) ["shop.app.checkout" "order"])))))
+      (is (contains? (lx/footprint db) ["shop.app.checkout" "order"]))
+      (is (contains? (lx/footprint db) ["shop.domain.orders" "address"])))))
 
 (deftest a-signature-claiming-what-nothing-explains
   (testing "`place` gives an order, takes nothing of one and reads none; `label` is handed the

@@ -33,11 +33,10 @@
 (Concept ghost "Nothing in the domain answers to this name." {})
 
 (defn- model []
-  (binding [lx/*sources* '{:vocabulary ["shop.domain.lexicon"] :view #{shop.domain.lexicon/view}}]
-    (let [p ["test/fixtures/lexicon"]]
-      (build/model->cozo ['fukan.canvas.core.bridge-test]
-                         {:planes {"code"   (:roots (tc/extract-roots p))
-                                   "domain" (:roots (lx/extract-roots p))}}))))
+  (let [p ["test/fixtures/lexicon"]]
+    (build/model->cozo ['fukan.canvas.core.bridge-test]
+                       {:planes {"code"   (:roots (tc/extract-roots p))
+                                 "domain" (:roots (lx/extract-roots p))}})))
 
 (defn- names [db where]
   (set (cq/q (into '[:find ?an ?bn :in $ % :where] (conj where '[?a :entity/name ?an] '[?b :entity/name ?bn]))

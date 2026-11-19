@@ -2,11 +2,19 @@
   "The order entities of the fixture vocabulary. Read as forms by the Lexicon producer's tests;
    never loaded.")
 
+(def Address
+  "A value shape: no identity, contained by being nested."
+  [:map {:lexicon/value true}
+   [:address/street :string]
+   [:address/city :string]])
+
 (def Customer
   "Somebody who buys."
   [:map
    [:customer/id :int]
    [:customer/name :string]
+   [:customer/address Address]
+   [:customer/previous {:optional true} [:vector Address]]
    [:customer/orders {:lexicon/many :order/customer :optional true} [:* :int]]])
 
 (def Order
@@ -26,14 +34,8 @@
    [:line/product {:lexicon/ref :product} :int]
    [:line/quantity :int]])
 
-(def Address
-  "Not an entity: no id key. An ordinary schema living beside the entities."
-  [:map
-   [:address/street :string]
-   [:address/city :string]])
-
 (def Mixed
-  "Not an entity: its keys are from two namespaces."
+  "An ordinary schema living beside the shapes: no vocabulary lists it."
   [:map
    [:mixed/id :int]
    [:order/total :int]])

@@ -536,7 +536,10 @@
 ;; function naming one view in its body — and the relations reading it (`fn-uses`, `fn-reads`,
 ;; `reaches-entity`). Terms 246→263 (+17), laws 108→116 (+8): all eight are the slot laws
 ;; `ViewUse`'s three slots generate (cardinality and target type); the producer still authors none.
-(def ^:private golden-terms {:count 263 :hash -537140468})
+;; 2026-11-19 (the one way to declare a domain): the Lexicon producer reads value shapes — a
+;; `Value` sort beside `Entity`, and `:embeds` from the attribute nesting one. Terms 263→267 (+4:
+;; the sort's kind rule, `embeds` and its closure, and `attribute` gaining a second source).
+(def ^:private golden-terms {:count 267 :hash 252941857})
 ;; 2026-09-22 (later still): every authored law in the shipped vocabulary carries a stable `:key`
 ;; — Region, Band, Subsystem, Stratum, Kind and the malli dialect were reachable only by matching
 ;; their DESCRIPTION, which goes silently green when the sentence is reworded and silent altogether
@@ -545,7 +548,9 @@
 ;; 2026-11-19 (inline signatures): `Fn` gained `:signature-unread` — the mark on a function whose
 ;; written signature a static read cannot take. Laws 116→117, the slot's generated type check;
 ;; terms unchanged (a scalar slot emits no rule).
-(def ^:private golden-laws  {:count 117 :hash -1289894650})
+;; 2026-11-19 (the one way to declare a domain): laws 117→119, the target-type checks the two
+;; new slots (`Value :attribute`, `Attribute :embeds`) generate.
+(def ^:private golden-laws  {:count 119 :hash -1970206458})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
