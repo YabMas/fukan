@@ -1,7 +1,8 @@
 (ns canvas.architecture.cozo.query
   "Self-spec: `fukan.cozo.query` — the general datalog→CozoScript query compiler + entity
-   accessor: the kernel query primitive on Cozo (the `d/q` + `d/entity` replacement at
-   cut-over). It owns the clause/rule compiler (datom / not / not-join / or-join /
+   accessor: the engine's read interface (the `d/q` + `d/entity` replacement at cut-over). Its
+   callers hand it datalog as data and name no CozoScript; the CozoScript is this module's. It owns
+   the clause/rule compiler (datom / not / not-join / or-join /
    predicates / rule-calls + the vocab-rule index and reachability closure); the law engine
    and the ported readers build on it. `q` compiles each clause to DIRECT stored-relation
    access (never a view — a view is materialized and a materialized relation has no key), so

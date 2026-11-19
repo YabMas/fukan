@@ -1,7 +1,7 @@
 (ns canvas.architecture.cozo.law
   "Self-spec: `fukan.cozo.law` — the general law engine on Cozo, and the home of `check`. Compiles a
    defstructure law's datalog (offenders + where, read from the kernel it DEFINES via `laws-of`) into
-   CozoScript over the unified `triple` view and runs it. `check` (+ its readers `violations-of`/
+   CozoScript (direct stored-relation access, through the cozo-query compiler) and runs it. `check` (+ its readers `violations-of`/
    `violation-names`/`violation-rows`) lives HERE, in the engine, because it is EVALUATION — the
    kernel owns DEFINITION.
    The dependency runs one way (engine → kernel), so there is no `structure ↔ law` cycle and no registry

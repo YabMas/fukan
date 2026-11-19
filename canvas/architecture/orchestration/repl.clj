@@ -2,7 +2,7 @@
   "Self-spec: `fukan.repl` — the shipped COCKPIT, the consumer surface an external project drives
    its model with. `go` configures + builds; `refresh`/`reset` reload changed code (via clj-reload,
    external-by-design — not modelled) and rebuild the held model through the `infra-model` facade;
-   `status` reads the held model back through the kernel query primitive. `config` is a pure read
+   `status` reads the held model back through the engine's query interface. `config` is a pure read
    of the held cockpit state, delegating nothing.
 
    The remaining fourteen are the READ commands — the model-explorer surface, all reading the held

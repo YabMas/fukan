@@ -2,7 +2,7 @@
   "Self-spec: the ARCHITECTURE OVERVIEW projection (`fukan.canvas.projection.architecture`) — fukan's
    system map: its the code Subsystems, the Modules each clusters, and the declared `:may-depend`
    DAG, derived live from the held model. A graph→text projection over the kernel's shared
-   `StructureDb`, run through the kernel Cozo query layer (`query/q`)."
+   `StructureDb`, run through the engine's query interface (`query/q`)."
   (:require [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
             [canvas.architecture.cozo.query :as query]
             [canvas.architecture.kernel.substrate :as substrate]))

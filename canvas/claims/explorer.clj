@@ -98,6 +98,6 @@
   {:about [explorer/explorer view/projection-view] :evidence "round"})
 
 (Claim web-is-below-orchestration
-  "The web subsystem depends on projection and the kernel only; orchestration depends on it and
-   it never on orchestration."
+  "The web subsystem depends on projection, the kernel and the engine only; orchestration depends
+   on it and it never on orchestration."
   {:about [explorer/explorer repl/repl view/projection-view] :evidence "round"})

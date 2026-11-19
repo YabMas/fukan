@@ -1,8 +1,9 @@
 (ns canvas.architecture.kernel.lens
   "Self-spec: fukan's LENS ENGINE — `core.lens` (`fukan.canvas.core.lens`): run a selection query,
    WITH the vocab-derived rules, to a focus node-set, and refine a focus by a further query
-   (lens-within-lens). Split out of the rule-derivation machinery so the chain stays acyclic:
-   lens-engine → kernel → query-engine. This module now ALSO owns the act grammar — the
+   (lens-within-lens). A CLIENT of the engine, not part of the kernel: it reads the model through
+   `q` like every other reader, so it sits in the projection subsystem, above both the kernel it
+   takes vocab rules from and the engine it queries. It also owns the act grammar — the
    `Lens`/`Projection`/`Check` structures — fukan-native apparatus, not domain vocab,
    alongside the machinery that runs it (incl. `run-checks`, the use-side dual of `check`)."
   (:require [fukan.common.vocab.code.kind :refer [Kind]] [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
@@ -12,7 +13,7 @@
 
 (Module core-lens
   "The lens engine — evaluate a focus query (with vocab rules) and refine it. Selections run through
-   the kernel Cozo query layer (`query/q`), so the reads inherit its :throws partiality (a malformed
+   the engine's query interface (`query/q`), so the reads inherit its :throws partiality (a malformed
    selection is an uncompilable query)."
   (Operation focus-nodes "Run :where clauses (binding ?n) with the vocab rules → focus node-set."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:clauses [:vector query/Clause]]] [:vector substrate/Eid]]
