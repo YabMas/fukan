@@ -231,15 +231,16 @@
    definition clj-kondo's metadata cannot carry one for. An explicit `:malli/schema` wins."
   [v effs call-ids inline-sig]
   (let [sig     (or (:malli/schema (:meta v)) inline-sig)
-        ;; `:=>` is one arity, `:function` several — both are function types and both are stored
-        ;; whole. Anything else on `:malli/schema` (a project annotating a non-function value) is
-        ;; not a signature and is left alone.
-        fn-sig? (and (vector? sig) (#{:=> :function} (first sig)))
+        ;; `:=>` (or malli's flat `:->`) is one arity, `:function` several — all are function
+        ;; types and all are stored whole. Anything else on `:malli/schema` (a project
+        ;; annotating a non-function value) is not a signature and is left alone.
+        fn-sig? (and (vector? sig) (#{:=> :-> :function} (first sig)))
         ;; An annotation is an EXPRESSION, and a static read sees only the ones that are data:
-        ;; `(mu/dissoc Claim :held)` is a schema to malli and a list to this reader, and the
-        ;; dialect covers a part of malli, not all of it. Such a signature is not stored — a
-        ;; guessed one would be compared against the design as if it were what the code says —
-        ;; and the function is MARKED, so what could not be read is a fact, not an absence.
+        ;; `(mu/dissoc Claim :held)` is a schema to malli and a list to this reader. The
+        ;; dialect reads all of malli that is WRITTEN — every schema type, with its properties
+        ;; — and refuses what is computed. Such a signature is not stored — a guessed one would
+        ;; be compared against the design as if it were what the code says — and the function
+        ;; is MARKED, so what could not be read is a fact, not an absence.
         sig-iv  (when fn-sig?
                   (try (s/value-literal->iv schema-tag sig)
                        (catch clojure.lang.ExceptionInfo _ nil)))
