@@ -285,6 +285,30 @@
       (is (= 2 code))
       (is (= "`--src` is not a flag `explore` takes" error)))))
 
+(deftest view-and-explore-read-the-code-only-when-asked-for-a-plane
+  (testing "with no --plane the model is the declaration alone; with one, the producers read `src`,
+            and a plane the model does not hold is the explorer's to refuse in `view`, and serves
+            nothing in `explore`"
+    (let [roots (atom [])
+          built pipeline/build-model]
+      ;; the producers' build is replaced by the declaration's, so what is asserted is the ROOT
+      ;; asked for and what is done with a model that holds no plane — not fukan's own extraction
+      (with-redefs [pipeline/build-model (fn [root] (swap! roots conj root) (built nil))
+                    explorer/start       (fn [& _] (throw (ex-info "a server was started" {})))]
+        (is (= 0 (:code (#'cli/run ["view" "--nest" "child"]))))
+        (let [{:keys [code error]} (#'cli/run ["view" "--nest" "child" "--plane" "nowhere"])]
+          (is (= 2 code))
+          (is (re-find #"plane.*nowhere" error)))
+        (let [{:keys [code error]} (#'cli/run ["explore" "--plane" "nowhere" "--port" "0"])]
+          (is (= 2 code))
+          (is (re-find #"no plane named \"nowhere\"" error)))
+        ;; given with no value, `--plane` is present: it names no plane held, so nothing is served
+        (doseq [args [["explore" "--plane"] ["explore" "--plane" "--port" "0"]]]
+          (let [{:keys [code error]} (#'cli/run args)]
+            (is (= 2 code) (pr-str args))
+            (is (re-find #"`--plane` needs a value" (str error)) (pr-str args))))
+        (is (= [nil "src" "src" "src" "src"] @roots))))))
+
 (deftest a-port-that-is-not-a-number-is-refused-in-a-sentence
   (let [{:keys [code error]} (#'cli/run ["explore" "--port" "abc"])]
     (is (= 2 code))

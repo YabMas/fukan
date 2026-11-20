@@ -1,7 +1,9 @@
 // The explorer's page. It owns exactly one piece of state — what the viewer chose — and keeps
 // it in the address. The view itself is there as the explorer's own graph-request parameters,
-// under the request's names and in its encodings: nest, link, select, open, unplaced, root. They
-// are sent as the address holds them. Beside them are three things only this page reads: trail
+// under the request's names and in its encodings: nest, link, select, open, unplaced, root, plane.
+// They are sent as the address holds them, and the plane with a declaration request too, so a box
+// selected in a view of a plane is answered from that plane. Which planes exist is the model's to
+// say: the page offers what the explorer answers and names none itself. Beside them are three things only this page reads: trail
 // (the ids dived through to reach the root), sel (the selected path) and embed.
 //
 // The page draws nothing. It shows the SVG the explorer answers for the address, and of that
@@ -12,7 +14,7 @@ const key = (path) => JSON.stringify(path);
 
 // ── the address ──────────────────────────────────────────────────────────────
 
-const VIEW = ['nest', 'link', 'select', 'open', 'unplaced', 'root'];
+const VIEW = ['nest', 'link', 'select', 'open', 'unplaced', 'root', 'plane'];
 const json = (text, otherwise) => { try { const v = JSON.parse(text); return v == null ? otherwise : v; } catch (_) { return otherwise; } };
 
 // The address as the explorer's transport reads it: one value per key, the LAST occurrence of a
@@ -41,7 +43,7 @@ function readState() {
   const list = (k) => (q.get(k) || '').split(',').map((s) => s.trim()).filter(Boolean);
   return {
     nest: list('nest'), link: list('link'), select: q.get('select') || '',
-    unplaced: q.get('unplaced') === '1', root: q.get('root') || '',
+    unplaced: q.get('unplaced') === '1', root: q.get('root') || '', plane: q.get('plane') || '',
     open: json(q.get('open') || '[]', []),
     trail: json(q.get('trail') || '[]', []), sel: json(q.get('sel') || 'null', null),
     embed: q.get('embed') === '1',
@@ -55,6 +57,7 @@ function writeState(state, push) {
   if (state.select) q.set('select', state.select);
   if (state.unplaced) q.set('unplaced', '1');
   if (state.root) q.set('root', state.root);
+  if (state.plane) q.set('plane', state.plane);
   if (state.open.length) q.set('open', JSON.stringify(state.open));
   if (state.trail.length) q.set('trail', JSON.stringify(state.trail));
   if (state.sel) q.set('sel', JSON.stringify(state.sel));
@@ -77,6 +80,7 @@ let state = readState();
 // relative, so the page also works when a host serves it under a path of its own.
 document.body.classList.toggle('embedded', state.embed);
 let relations = [];
+let planes = [];
 let drawn = 0; // guards against an older answer landing after a newer one
 
 const shortName = (qualified) => qualified.slice(qualified.lastIndexOf('/') + 1);
@@ -105,7 +109,7 @@ function fillMenu(menu, chosen, onChange) {
       menu.append(label);
     }
   };
-  section('declared between nodes', stored);
+  section('stored between nodes', stored);
   section('derived or unused', rest);
 }
 
@@ -122,6 +126,22 @@ function renderPickers() {
   $('nest-sum').textContent = state.nest.join(', ') || 'choose…';
   $('link-sum').textContent = state.link.join(', ') || 'none';
   $('select').value = state.select;
+  // the declared design, then every plane the model holds — and the one the address names even
+  // when it holds no such plane, so the page shows what it asked for and the explorer says why not
+  const menu = $('plane');
+  const names = planes.map((p) => p.name);
+  if (state.plane && !names.includes(state.plane)) names.push(state.plane);
+  menu.textContent = '';
+  for (const [value, text] of [['', 'declared design'], ...names.map((n) => {
+    const p = planes.find((x) => x.name === n);
+    return [n, p ? n + ' · ' + p.nodes : n];
+  })]) {
+    const o = document.createElement('option');
+    o.value = value; o.textContent = text; o.selected = value === state.plane;
+    menu.append(o);
+  }
+  menu.hidden = names.length === 0;
+  $('title').textContent = 'fukan · ' + (state.plane || 'declared design');
 }
 
 // ── asking ───────────────────────────────────────────────────────────────────
@@ -233,7 +253,7 @@ function show(svg) {
   markSelected();
   // Opening or closing a box moves everything, so the old camera would point at empty canvas;
   // a redraw at the same size keeps the camera where the viewer put it.
-  const view = [state.nest.join(','), state.select, state.unplaced, state.root, w, h].join('|');
+  const view = [state.plane, state.nest.join(','), state.select, state.unplaced, state.root, w, h].join('|');
   if (fitted !== view) { fit(w, h); fitted = view; }
 }
 
@@ -354,7 +374,9 @@ async function showDetail() {
   const id = path[path.length - 1];
   let d = null;
   try {
-    const res = await fetch('api/node?id=' + encodeURIComponent(id));
+    const asked = new URLSearchParams({ id });
+    if (state.plane) asked.set('plane', state.plane);
+    const res = await fetch('api/node?' + asked);
     const [outcome, value] = (await res.json()).answer;
     if (outcome === 'declaration') d = value;
   } catch (_) { /* answered below as missing */ }
@@ -391,6 +413,14 @@ $('select').addEventListener('keydown', (ev) => {
   showDetail();
   load();
 });
+$('plane').addEventListener('change', (ev) => {
+  state.plane = ev.target.value;
+  state.open = []; state.sel = null; state.root = ''; state.trail = [];
+  writeState(state, true);
+  renderPickers();
+  showDetail();
+  load();
+});
 $('reload').addEventListener('click', () => { boot(); });
 $('collapse').addEventListener('click', () => { state.open = []; writeState(state, true); load(); });
 document.addEventListener('click', (ev) => {
@@ -402,7 +432,8 @@ async function boot() {
   try {
     const [outcome, value] = (await (await fetch('api/views')).json()).answer;
     relations = outcome === 'choices' ? value.relations : [];
-  } catch (_) { relations = []; }
+    planes = outcome === 'choices' ? value.planes : [];
+  } catch (_) { relations = []; planes = []; }
   renderPickers();
   showDetail();
   load();

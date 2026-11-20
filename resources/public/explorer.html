@@ -44,6 +44,9 @@
   input#select { flex: 1 1 220px; min-width: 160px; padding: 4px 8px; font: 12px var(--mono); color: var(--ink);
                  background: var(--box); border: 1px solid var(--line); border-radius: 6px; }
   input#select:focus { outline: none; border-color: var(--accent); }
+  select#plane { padding: 3px 6px; font: inherit; color: var(--ink); background: var(--box);
+                 border: 1px solid var(--line); border-radius: 6px; }
+  select#plane[hidden] { display: none; }
   button { font: inherit; color: var(--ink); background: var(--box); border: 1px solid var(--line);
            border-radius: 6px; padding: 4px 10px; cursor: pointer; }
   button:hover { border-color: var(--accent); }
@@ -93,7 +96,8 @@
 </head>
 <body>
 <header>
-  <h1>fukan · declared design</h1>
+  <h1 id="title">fukan · declared design</h1>
+  <select id="plane" hidden aria-label="What to draw: the declared design, or one plane the model holds"></select>
   <details class="pick" id="pick-nest"><summary><b>Nest by</b> <span id="nest-sum">—</span></summary><div class="menu" id="nest-menu"></div></details>
   <details class="pick" id="pick-link"><summary><b>Edges</b> <span id="link-sum">—</span></summary><div class="menu" id="link-menu"></div></details>
   <input id="select" spellcheck="false" placeholder='narrow, e.g. [[?n :entity/name "…"]] — Enter to apply' aria-label="Selection, EDN clauses binding ?n">
@@ -102,7 +106,7 @@
   <span id="at"></span>
 </header>
 <main>
-  <div id="canvas" role="img" aria-label="The declared design as a nested graph"><div id="viewport"></div></div>
+  <div id="canvas" role="img" aria-label="The chosen view as a nested graph"><div id="viewport"></div></div>
   <div id="notice"><div></div></div>
   <nav id="crumbs" aria-label="Where this view is rooted"></nav>
   <div id="unplaced" role="status"></div>

@@ -60,7 +60,8 @@
      :performs  [:io :throws :state]
      :delegates [infra/get-model arch/architecture-overview]})
   (Operation explore
-    "Serve the held Model's declared design in the browser and print the address. The explorer is
+    "Serve the held Model in the browser — its declared design, or any plane the held model holds,
+     as the page asks — and print the address. The explorer is
      handed `get-model` itself, not the model, so it reads whatever is held when a request
      arrives; calling this again while one is running stops the earlier server first."
     {:signature [:=> [:cat] extraction/Unit]

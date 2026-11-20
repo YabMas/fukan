@@ -19,56 +19,31 @@
   {:about [view/projection-view] :evidence "round"})
 
 (Claim viewer-names-no-vocabulary
-  "The view projection, the drawing projection, the selection reference and the explorer — its
-   page's markup and script included — mention no sort and no relation of any vocabulary; a
-   model in a vocabulary fukan does not ship is drawn, and has its selections exemplified, by
-   the same code. The example in the page's selection input, which names a sort today, is
-   replaced by one that names none."
-  {:about [view/projection-view drawing/projection-drawing reference/projection-reference
-           explorer/explorer]
-   :evidence "round"})
+  "The view projection, the drawing projection, the selection reference and the explorer — its page's markup and script included — mention no sort and no relation of any vocabulary other than the reflection meta-grammar, and no plane label; a model in a vocabulary fukan does not ship, on planes its composition names, is drawn by the same code, and the selections of its declared design are exemplified by the same code."
+  {:about [view/projection-view drawing/projection-drawing reference/projection-reference explorer/explorer] :evidence "round"})
 
-(Claim only-the-declared-design
-  "A view's selection is the design projection's declared nodes [declared-is-one-definition],
-   narrowed by the spec's select when it has one, and every node of a view graph is a node of
-   its selection. On a model built with extraction no extracted node and no edge to one
-   appears."
-  {:about [view/projection-view design/projection-design] :evidence "round"})
+(Claim one-universe-per-view
+  "A view's universe is the design projection's declared nodes [declared-is-one-definition] when its spec names no plane, and the named nodes the model labels with the plane it names otherwise. A view's selection is its universe narrowed by the spec's select when it has one; every node of a view graph is a node of its selection, and every nesting or link pair it uses has both ends in its universe. So a view of one plane shows no node and no edge of another plane or of the declared design, and a view naming no plane shows no produced node."
+  {:about [view/projection-view view/universe design/projection-design] :evidence "round"})
 
 (Claim declared-is-one-definition
-  "The design projection's declared nodes exclude extracted nodes, and no caller removes them
-   from its result."
+  "The design projection's declared nodes exclude every produced node, whatever plane it is on, and no caller removes produced nodes from its result itself; they are the universe of a view that names no plane [one-universe-per-view]."
   {:about [design/projection-design] :evidence "round"})
 
 (Claim visible-is-what-was-opened
-  "Below its root level a view graph is what the viewer opened: a node of the selection
-   [only-the-declared-design] that has a container in the selection under the nesting relations
-   appears only as a direct member of a visible open path, and every direct member of a visible
-   open path appears."
+  "Below its root level a view graph is what the viewer opened: a node of the selection [one-universe-per-view] that has a container in the selection under the nesting relations appears only as a direct member of a visible open path, and every direct member of a visible open path appears."
   {:about [view/projection-view] :evidence "round"})
 
 (Claim unplaced-is-counted-not-drawn
-  "A declared node that the nesting relations of a view spec neither put inside another
-   declared node nor give a declared member is unplaced. Unless the spec asks for unplaced
-   nodes, none appears in the view graph; the view graph of an unrooted spec counts, by sort,
-   the unplaced nodes of its selection, and the count is the same whether or not the spec asked
-   to draw them. The view graph of a rooted spec [a-view-may-be-rooted] counts none: every node
-   below a root is placed by it. Placement is judged over the whole declared design and not
-   over the selection."
+  "A node of a view's universe [one-universe-per-view] that the nesting relations of its spec neither put inside another node of the universe nor give a member of it is unplaced. Unless the spec asks for unplaced nodes, none appears in the view graph; the view graph of an unrooted spec counts, by sort, the unplaced nodes of its selection, and the count is the same whether or not the spec asked to draw them. The view graph of a rooted spec [a-view-may-be-rooted] counts none: every node below a root is placed by it. Placement is judged over the whole universe and not over the selection."
   {:about [view/projection-view] :evidence "round"})
 
 (Claim a-view-may-be-rooted
-  "A view spec may name one declared node as its root. The root level of its view graph is then
-   the root's direct members under the nesting relations that are in the selection, whether or
-   not the root itself is; no node that is not below the root appears, and no edge with an end
-   that is not below the root is drawn. A root the model does not declare yields a view graph
-   with no nodes, no edges and no count, not a refusal."
+  "A view spec may name one node of its universe [one-universe-per-view] as its root. The root level of its view graph is then the root's direct members under the nesting relations that are in the selection, whether or not the root itself is; no node that is not below the root appears, and no edge with an end that is not below the root is drawn. A root its universe does not hold yields a view graph with no nodes, no edges and no count, not a refusal."
   {:about [view/projection-view] :evidence "round"})
 
 (Claim edges-are-carried-not-dropped
-  "A link edge between two nodes of the selection [only-the-declared-design] is drawn between
-   the nearest visible occurrences of its ends whenever those differ, aggregated with a count;
-   and every drawn edge carries at least one such declared edge."
+  "A link edge between two nodes of the selection [one-universe-per-view] is drawn between the nearest visible occurrences of its ends whenever those differ, aggregated with a count; and every drawn edge carries at least one such edge."
   {:about [view/projection-view] :evidence "round"})
 
 (Claim paths-are-entity-ids
@@ -84,31 +59,11 @@
   {:about [explorer/explorer infra/infra-model repl/repl cli/cli] :evidence "round"})
 
 (Claim a-declaration-is-answered-by-entity-id
-  "Selecting a node shows its authored declaration: the explorer answers a declaration request,
-   which names one node by its entity id, with a DeclarationAnswer — the time the model was
-   read for that request, and exactly one of the node's sort and authored form, a rejection of
-   a request naming no node, missing when the declared design [declared-is-one-definition] has
-   no node with that id, or no-model. An extracted node is missing."
+  "Selecting a node shows its form: the explorer answers a declaration request, which names one node by its entity id and may name a plane, with a DeclarationAnswer — the time the model was read for that request, and exactly one of the node's sort and its form, a rejection of a request naming no node or naming a plane with no value, missing when the universe [one-universe-per-view] of the plane named, or of none when it names none, has no node with that id — as it has none for a plane the model does not hold — or no-model. The declaration answer reads the plane itself, beside the graph request's parse, and builds no view spec."
   {:about [explorer/explorer] :evidence "round"})
 
 (Claim request-shape-is-parsed-once
-  "The explorer has an answer for each of four readings — the graph, its drawing, one node's
-   declaration [a-declaration-is-answered-by-entity-id], and the relations a model offers to
-   view by — and each answer has one form: the time the model was read for that request, and
-   exactly one tagged alternative, of which no-model is always one. The relations on offer are
-   answered as a ChoicesAnswer: those relations, as the view projection's ViewChoices, or
-   no-model. A graph request parses to a GraphRequest: tagged view with a view spec, open paths
-   and a palette — light when the request names none — or tagged rejected with the reason — a
-   malformed parameter, a palette that is not a Theme, or a relation name that is not among
-   those the model offers to view by. That offer is one value, the view projection's
-   ViewChoices: the parse, its rejection and the ChoicesAnswer all read it. What the explorer's
-   answer returns for a graph request is a GraphAnswer: the time the model was read for that
-   request, and exactly one of the graph, that rejection, the engine's refusal of the selection
-   as unanswerable, or no-model. A graph request whose query string fails percent-decoding in
-   the transport does not reach answer and gets none of them. A drawing request goes through
-   the same parse, and its answer is a DrawingAnswer, the graph's alternative replaced by its
-   drawing in the parsed palette. The view projection is only called with a
-   parsed spec and paths and checks no shape."
+  "The explorer has an answer for each of four readings — the graph, its drawing, one node's declaration [a-declaration-is-answered-by-entity-id], and the relations and planes a model offers to view by [planes-are-offered] — and each answer has one form: the time the model was read for that request, and exactly one tagged alternative, of which no-model is always one. The offer is answered as a ChoicesAnswer: the view projection's ViewChoices, or no-model. A graph request parses to a GraphRequest: tagged view with a view spec, open paths and a palette — light when the request names none — or tagged rejected with the reason — a malformed parameter, a palette that is not a Theme, a relation name that is not among those the model offers to view by, or a plane the model does not hold. That offer is one value, the view projection's ViewChoices: the parse, its rejection and the ChoicesAnswer all read it. What the explorer's answer returns for a graph request is a GraphAnswer: the time the model was read for that request, and exactly one of the graph, that rejection, the engine's refusal of the selection as unanswerable, or no-model. A graph request whose query string fails percent-decoding in the transport does not reach answer and gets none of them. A drawing request goes through the same parse, and its answer is a DrawingAnswer, the graph's alternative replaced by its drawing in the parsed palette. The view projection is only called with a parsed spec and paths and checks no shape."
   {:about [explorer/explorer view/projection-view] :evidence "round"})
 
 (Claim web-is-below-orchestration
@@ -117,22 +72,11 @@
   {:about [explorer/explorer repl/repl view/projection-view] :evidence "round"})
 
 (Claim a-view-is-answered-without-a-server
-  "The CLI's `view` verb builds the declared design from the spec dirs alone and answers its
-   view by the explorer's own answer, handing it the verb's flags as a graph request's
-   parameters. It builds no view spec of its own, calls the view projection through nothing
-   else, and opens no port."
+  "The CLI's `view` verb builds the declared design from the spec dirs alone when it is given no --plane, and when it is given one, the model the composition root's registered producers make with them from the source root the CLI defaults to, `src`. It takes no --src, reads only whether --plane was given, and answers its view by the explorer's own answer, handing it the verb's flags, --plane among them, as a graph request's parameters. It builds no view spec of its own, calls the view projection through nothing else, and opens no port. `explore` builds its model the same way: from the spec dirs alone when it is given no --plane, exactly as it does without one today, and with the registered producers over `src` when it is given one. It takes no --src; given a plane the model it built does not hold, it serves nothing and is undecidable, naming the plane. It reads --plane only to choose the build and to check that plane is held, hands the explorer a function yielding that model, and leaves which plane a page draws to the page's own request."
   {:about [cli/cli explorer/explorer] :evidence "round"})
 
 (Claim the-address-is-the-request
-  "The page's address carries a view as a graph request's parameters — nest, link, select, open,
-   unplaced and root, under those names and in the encodings the explorer's parse reads — and
-   the page sends them as its address holds them. The ids a viewer dived through to reach the
-   root, which the breadcrumbs step back along, are kept in the address as a trail only the page
-   reads, as the selected path is. An address whose root is a JSON array of ids — the root the
-   page's script wrote before this change — is replaced before the page asks by one whose root
-   is that array's last id and whose trail is the ids before it. The explorer's `address` writes
-   a graph request's parameters as the query string its transport reads back as those
-   parameters; it takes no view spec."
+  "The page's address carries a view as a graph request's parameters — nest, link, select, open, unplaced, root and plane, under those names and in the encodings the explorer's parse reads — and the page sends them as its address holds them, the plane with its declaration requests too. The ids a viewer dived through to reach the root, which the breadcrumbs step back along, are kept in the address as a trail only the page reads, as the selected path is. An address whose root is a JSON array of ids is replaced before the page asks by one whose root is that array's last id and whose trail is the ids before it. The explorer's `address` writes a graph request's parameters as the query string its transport reads back as those parameters; it takes no view spec."
   {:about [explorer/explorer] :evidence "round"})
 
 (Claim one-drawing-for-page-and-export
@@ -184,3 +128,15 @@
    with their members — and it reads every selection back out of the text and evaluates each
    through the selection engine against that model, failing on one the engine refuses."
   {:about [reference/projection-reference] :evidence "round"})
+
+(Claim planes-are-offered
+  "The choices a model offers to view by name, beside the binary relations its grammar declares, the planes it holds, each with how many named nodes carry its label; a relation's edge count is its stored edges whose two ends lie in one universe."
+  {:about [view/projection-view explorer/explorer] :evidence "round"})
+
+(Claim the-reference-domain-is-drawn
+  "A test builds the reference shop and the web library it uses with the project's producers and asks the explorer for a view of the domain plane nesting by declares-shape, part and attribute and linking by draws-on and entity-references. It asserts the root level is exactly the shop and web vocabularies, each opening onto the shapes it declares and those onto their attributes; a draws-on edge from shop to web and a reference edge from login to web.session; and that no node or edge end of the graph is outside the domain plane. It asserts the same model asked with no plane gives the declared design's graph. Run in reference/shop with --spec-dirs design, where web is not under `src` and is read from the classpath, `fukan.cli view --plane domain` nesting and linking as that test does prints a graph whose root level is exactly the shop and web vocabularies, with the draws-on edge from shop to web and the reference edge from login to web.session, and with --out writes the PNG there and the SVG beside it. Run there with --plane domain, `fukan.cli explore` serves an explorer that, asked for the domain plane with the same nest and link parameters, answers that same graph: both verbs build one model the same way and answer through the explorer's own answer."
+  {:about [view/projection-view explorer/explorer cli/cli] :evidence "round"})
+
+(Claim declared-only-descriptions-are-restated
+  "The same change restates, under canvas/architecture, every description of the view projection, the explorer, the CLI and the cockpit's explore that names the declared design as the only thing a view draws or the explorer serves — view-graph's graph 'over the declared nodes' and the explorer module's 'Serve the declared design' among them — so that it names a view's universe [one-universe-per-view]; and nido:design:check is green on that change."
+  {:about [view/projection-view explorer/explorer cli/cli repl/repl] :evidence "round"})

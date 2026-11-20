@@ -1,5 +1,5 @@
 (ns fukan.web.explorer
-  "The EXPLORER — a held model's declared design, served to a browser.
+  "The EXPLORER — a held model's declared design, or one plane of it, served to a browser.
 
    Everything that makes a reading reachable over HTTP is in here and nowhere else: the routes,
    the JSON on the wire, the page, and the one place a request's untrusted parameters become a
@@ -18,7 +18,6 @@
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [fukan.canvas.projection.design :as design]
             [fukan.canvas.projection.drawing :as drawing]
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.view :as view]
@@ -64,13 +63,17 @@
    `select` is EDN clauses binding ?n; whether the engine can evaluate them is not decided here.
    `unplaced` asks for the nodes the nesting says nothing about, and when present must be `1`.
    `root` is an entity id taken as given: one the model lacks is the projection's to answer.
+   `plane` names the plane drawn instead of the declared design, and must be one `db` holds.
    `theme` is the palette a drawing of the view is painted in, `light` when the request names
    none; a graph answer does not depend on it, and it is still refused when it is no palette.
    A parameter PRESENT with no value is refused rather than read as absent: whoever sent it
    asked for something, and answering as if they had not would hand back a view they did not
    ask for. No link edges is asked for by leaving `link` out."
   [db params]
-  (let [known  (into #{} (map :name) (:relations (view/views db)))
+  (let [offer  (view/views db)
+        known  (into #{} (map :name) (:relations offer))
+        planes (into #{} (map :name) (:planes offer))
+        plane  (get params "plane")
         theme  (get params "theme" "light")
         root   (get params "root")
         unplaced (get params "unplaced")
@@ -91,13 +94,18 @@
       (and (some? unplaced) (not= "1" unplaced))
       [:rejected (str "unplaced: expected 1, not " (pr-str unplaced))]
       (and (some? root) (str/blank? root)) [:rejected "root: name the node by its entity id"]
+      (and (some? plane) (str/blank? plane))
+      [:rejected "plane: name the plane to draw, or leave plane out for the declared design"]
+      (and (some? plane) (not (planes plane)))
+      [:rejected (str "plane: not a plane this model holds: " plane)]
       (not (#{"light" "dark"} theme))
       [:rejected (str "theme: expected light or dark, not " (pr-str theme))]
       :else                   [:view
                                (cond-> {:nest nest :link link}
                                  select (assoc :select select)
                                  (= "1" unplaced) (assoc :unplaced true)
-                                 root (assoc :root root))
+                                 root (assoc :root root)
+                                 plane (assoc :plane plane))
                                open
                                theme])))
 
@@ -162,21 +170,27 @@
   declaration
   "Answer a request for one node's declaration against whatever `model` yields now: `{:at
    :answer}`, `:answer` exactly one of `[:declaration {:id :sort :text}]` — the node's sort and
-   its authored form — `[:rejected reason]` when `params` names no node, `[:missing]` when the
-   model declares no node with the `id` it names, or `[:no-model]`.
+   its form — `[:rejected reason]` when `params` names no node, or names a plane with no value,
+   `[:missing]` when the universe of the `plane` it names — the declared design when it names
+   none — has no node with the `id` it names, or `[:no-model]`.
 
-   A node is named by its entity id, as it is in a path. An extracted node is `[:missing]`: it is
-   not part of the declared design this namespace serves."
+   A node is named by its entity id, as it is in a path. The plane is read here as the graph
+   request's parse reads it, so a box selected in a view of a plane is answered from that plane:
+   a produced node is `[:missing]` to a request naming no plane, and every node is to a request
+   naming a plane the model does not hold."
   [model params]
-  (let [db (model)
-        id (get params "id")]
+  (let [db    (model)
+        id    (get params "id")
+        plane (get params "plane")]
     {:at     (str (Instant/now))
      :answer (cond
                (not db)        [:no-model]
                (str/blank? id) [:rejected "id: name the node by its entity id"]
+               (and (some? plane) (str/blank? plane))
+               [:rejected "plane: name the plane, or leave plane out for the declared design"]
                :else
                (let [eid (ffirst (cq/q '[:find ?e :in $ ?id :where [?e :entity/id ?id]] db id))
-                     tag (some (fn [[e sort]] (when (= e eid) sort)) (design/declared-nodes db))]
+                     tag (some (fn [[e sort]] (when (= e eid) sort)) (view/universe db plane))]
                  (if tag
                    [:declaration {:id id :sort (str tag) :text (inst/instance-text db eid)}]
                    [:missing])))}))

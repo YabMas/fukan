@@ -27,20 +27,22 @@
      clojure -M:fukan -m fukan.cli elements --src src [--spec-dirs canvas] [--select '[(Module ?n)]']
      clojure -M:fukan -m fukan.cli view --nest child [--link may-depend] [--select '[(Band ?n)]']
                                         [--open '[[\"id\"]]'] [--unplaced 1] [--root id]
-                                        [--spec-dirs canvas] [--out view.png]
+                                        [--plane domain] [--spec-dirs canvas] [--out view.png]
                                         [--explorer http://localhost:7410/]
      clojure -M:fukan -m fukan.cli selection [--spec-dirs canvas]
-     clojure -M:fukan -m fukan.cli explore [--spec-dirs canvas] [--port 7410]
+     clojure -M:fukan -m fukan.cli explore [--spec-dirs canvas] [--port 7410] [--plane domain]
 
    `view` composes a view on the fly, with no server running. `--nest`, `--link`, `--select`,
-   `--open`, `--unplaced` and `--root` are the explorer's own graph-request parameters, each as a
+   `--open`, `--unplaced`, `--root` and `--plane` are the explorer's own graph-request parameters, each as a
    flag and in the same encoding, and they are handed to the explorer's own answer as given: a
    view asked here and one asked of a running explorer are parsed and refused by the same code.
    The answer on stdout is `{:address :graph :image}`. `:address` opens the same view in the
    explorer at `--explorer`. `--out` writes the view's drawing as a PNG at that path and as SVG
    beside it, and `:image` then says where and how many pixels: an image is not scaled to fit, so
    a view too large to read is narrowed by asking for less — `--root`, `--select`, fewer `--open`
-   paths. A request the explorer refuses is undecidable, with its reason on stderr.
+   paths. A request the explorer refuses is undecidable, with its reason on stderr. A view of the
+   declared design reads no code; given `--plane`, the model is built with the planes the
+   project's producers read from `src` as well, and the view draws the plane it names.
 
    `selection` prints what `--select` may say — the clause forms, the attributes, sorts and
    relations of THIS model, and worked selections built from them, each one run before it was
@@ -51,6 +53,9 @@
    it, and prints ONE line, `fukan explorer: http://localhost:<port>/`, to stdout once it is
    listening; that line is the readiness signal, and the only stdout the verb ever writes. It then
    blocks until killed, so a design edited after it started is served only by a new process.
+   `--plane` builds the model with the producers' planes as well, read from `src`, and refuses —
+   undecidable, serving nothing — when the model holds no plane of that name; the page then
+   offers the planes and draws the one it asks for.
    `--port 0` takes any free port, which is how a caller running several avoids choosing one — the
    printed line says which it got. A model that will not build exits 2, like any other verb.
 
@@ -133,12 +138,13 @@
    refusal can name it back to the caller in the form they typed."
   {:src "--src" :spec-dirs "--spec-dirs" :format "--format" :select "--select" :port "--port"
    :nest "--nest" :link "--link" :open "--open" :unplaced "--unplaced" :root "--root"
-   :out "--out" :explorer "--explorer"})
+   :out "--out" :explorer "--explorer" :plane "--plane"})
 
 (def ^:private view-parameters
   "The flags of `view` that are a graph request's parameters, under the names the explorer's
    parse reads them by."
-  {:nest "nest" :link "link" :select "select" :open "open" :unplaced "unplaced" :root "root"})
+  {:nest "nest" :link "link" :select "select" :open "open" :unplaced "unplaced" :root "root"
+   :plane "plane"})
 
 (def ^:private verb-flags
   "What each verb can CONSUME. A flag outside its verb's set is refused, because a verb that
@@ -150,10 +156,11 @@
    "report"   #{:src :spec-dirs :format :select}
    ;; one answer, as data, so there is no format to choose
    "elements" #{:src :spec-dirs :select}
-   ;; the explorer reads the declaration alone, as describe does, and the viewer chooses the rest
-   "explore"  #{:spec-dirs :port}
+   ;; the explorer reads the declaration alone, as describe does, and the viewer chooses the rest;
+   ;; `--plane` opts in to the producers' planes as well, read from the default source root
+   "explore"  #{:spec-dirs :port :plane}
    ;; a graph request's parameters, where to write the image, and whose address to print
-   "view"      #{:spec-dirs :nest :link :select :open :unplaced :root :out :explorer}
+   "view"      #{:spec-dirs :nest :link :select :open :unplaced :root :plane :out :explorer}
    "selection" #{:spec-dirs}})
 
 (def ^:private format-flags
@@ -195,7 +202,7 @@
         ;; kept as typed: `view` hands it to the explorer's parse, and the other verbs read it
         ;; in `with-defaults`
         "--select"    (recur more (assoc out :select value))
-        ("--nest" "--link" "--open" "--unplaced" "--root" "--out" "--explorer")
+        ("--nest" "--link" "--open" "--unplaced" "--root" "--plane" "--out" "--explorer")
         (recur more (assoc out (keyword (subs flag 2)) value))
         "--port"      (recur more (assoc out :port (or (parse-long (str value))
                                                        (throw (ex-info (str "`--port` takes a port number, not "
@@ -513,16 +520,24 @@
         own   (explorer/address params)]
     (str base "?" (str/join "&" (cond-> (vec kept) (seq own) (conj own))) fragment)))
 
+(defn- viewed-model
+  "The model `view` and `explore` read: the declared design under `spec-dirs` alone, or — when
+   `--plane` was given — that and the planes the composition root's registered producers read
+   from `src`. Only whether a plane was asked for is read here: which one, and whether the model
+   holds it, is the explorer's to answer."
+  [{:keys [spec-dirs src] :as opts}]
+  (binding [canvas-source/*spec-dirs* spec-dirs, *out* *err*]
+    (pipeline/build-model (when (contains? opts :plane) src))))
+
 (defn- view-verb
-  "Build the declared design under `spec-dirs` and answer one view of it by the explorer's own
-   answer, handed the verb's flags as a graph request's parameters: `{:address :graph :image}`.
+  "Build the model `viewed-model` names and answer one view of it by the explorer's own answer,
+   handed the verb's flags as a graph request's parameters: `{:address :graph :image}`.
 
    Nothing here reads a parameter: what `nest` or `open` must look like is the explorer's parse
    to say, so a request it refuses is thrown with its reason. `:image` is present when `out`
    named where to write: the PNG there, the SVG beside it, and the size in pixels."
-  [{:keys [spec-dirs out explorer] :as opts}]
-  (let [db     (binding [canvas-source/*spec-dirs* spec-dirs, *out* *err*]
-                 (pipeline/build-model nil))
+  [{:keys [out explorer] :as opts}]
+  (let [db     (viewed-model opts)
         ;; every flag given is handed on, one given with no value as an empty one: the explorer's
         ;; parse is what refuses it, and dropping it would answer a view nobody asked for
         params (into {} (keep (fn [[flag param]] (when (contains? opts flag) [param (str (get opts flag))])))
@@ -560,12 +575,23 @@
      (pipeline/build-model nil))))
 
 (defn- explore-verb
-  "Build the declared design under `spec-dirs` and serve it on `port`: `{:ok :serving :out}`, where
+  "Build the model `viewed-model` names and serve it on `port`: `{:ok :serving :out}`, where
    `:serving` is the running server and `:out` the line announcing where. The model is built before
-   the server starts, so a model that will not build throws here and never opens a port."
-  [{:keys [spec-dirs port]}]
-  (let [db     (binding [canvas-source/*spec-dirs* spec-dirs, *out* *err*]
-                 (pipeline/build-model nil))
+   the server starts, so a model that will not build throws here and never opens a port, and nor
+   does one that holds no plane named by `--plane`: an explorer that offers no plane would be
+   serving something nobody asked for. Which plane a page draws stays the page's request."
+  [{:keys [port plane] :as opts}]
+  (let [db     (viewed-model opts)
+        held   (into #{} (map :name) (:planes (second (:answer (explorer/choices (constantly db))))))
+        ;; presence, never the value: `--plane` given with none names no plane the model holds
+        _      (when (and (contains? opts :plane) (not (held plane)))
+                 (throw (ex-info (str (if (str/blank? plane)
+                                        "`--plane` needs a value — name the plane to serve"
+                                        (str "the model holds no plane named " (pr-str plane)))
+                                      (if (seq held)
+                                        (str " — it holds " (str/join ", " (sort held)))
+                                        " — no producer read anything from the source root"))
+                                 {:plane plane})))
         server (explorer/start port (constantly db))]
     {:ok      true
      :serving server

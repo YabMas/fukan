@@ -137,7 +137,8 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn ^{:malli/schema [:=> [:cat] :Unit]} explore
-  "Serve the held model's declared design in the browser and print the address.
+  "Serve the held model in the browser — its declared design, or any plane it holds, as the page
+   asks — and print the address.
 
    The explorer is handed `get-model` itself rather than a model, so it reads whatever is held
    when a request arrives: after `(refresh)` the page's Reload shows the rebuilt design with no
