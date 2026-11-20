@@ -154,3 +154,38 @@
         "the grammar does declare it")
     (is (not (contains? rels "vneeded"))
         "a relation that does not relate two things is not offered")))
+
+;; ── one universe per view ────────────────────────────────────────────────────
+
+(defn- planed-db
+  "left, bolt and nut produced on plane \"tray\", loose on plane \"bench\", the rest declared."
+  []
+  (build/plane-vars->cozo [#'right #'inner #'gear #'twin]
+                          {"tray" [#'left #'bolt #'nut] "bench" [#'loose]}))
+
+(deftest a-view-of-a-plane-draws-that-plane-alone
+  (let [db (planed-db)]
+    (testing "the plane's nodes and the edges between them, and nothing declared or of another plane"
+      (let [g (view/view-graph db (assoc spec :plane "tray") #{[(id #'left)]})]
+        (is (= #{"left" "bolt" "nut"} (labels g)))
+        (is (= #{[(id #'nut) (id #'bolt) 1]} (edge-set g))
+            "gear→bolt starts at a declared node and loose→gear at another plane's: neither is drawn")))
+    (testing "placement is judged over the plane: loose is the bench's only node, and unplaced there"
+      (is (= [{:sort "fukan.canvas.projection.view-test/VPart" :count 1}]
+             (:unplaced (view/view-graph db (assoc spec :plane "bench") #{})))))
+    (testing "a view naming no plane draws the declared design and no produced node"
+      (let [g (view/view-graph db spec #{[(id #'right)] [(id #'right) (id #'inner)]})]
+        (is (= #{"right" "inner" "gear"} (labels g))
+            "twin holds only bolt, which is the tray's, so in the declared design it is unplaced")
+        (is (empty? (filter #(#{"left" "bolt" "nut" "loose"} %) (labels g))))))
+    (testing "a plane the model does not hold has an empty universe, not a refusal"
+      (is (= {:nodes [] :edges [] :unplaced []}
+             (view/view-graph db (assoc spec :plane "shelf") #{}))))))
+
+(deftest views-offers-the-planes-and-counts-edges-within-one-universe
+  (let [{:keys [relations planes]} (view/views (planed-db))
+        rels (into {} (map (juxt :name :edges)) relations)]
+    (is (= [{:name "bench" :nodes 1} {:name "tray" :nodes 3}] planes))
+    (is (= 4 (get rels "vholds"))
+        "left→bolt and left→nut in the tray, right→inner and inner→gear declared; twin→bolt crosses")
+    (is (= 1 (get rels "vneeds")) "nut→bolt is the one edge with both ends in one universe")))

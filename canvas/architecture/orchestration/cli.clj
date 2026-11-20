@@ -9,10 +9,12 @@
    decides can fail a build.
 
    Three more are about looking at the declaration rather than judging against it. `view` answers
-   one view of it — the graph, an image of its drawing, and the address that shows the same view
+   one view of it, or — given `--plane` — of one plane of what the project's producers read from
+   `src` — the graph, an image of its drawing, and the address that shows the same view
    in a running explorer — with no server running. `selection` prints the selection language for
    this model, with selections that ran against it. `explore` serves the explorer over the
-   declaration until killed, for a program that embeds it and holds no REPL.
+   declaration — or, given `--plane`, over the model the project's producers read from `src` as
+   well — until killed, for a program that embeds it and holds no REPL.
 
    A sibling of `core` in the orchestration subsystem, and for the same reason: it composes the
    model lifecycle behind a `-main` and realizes no subject faculty of its own. Its judgement is
@@ -34,7 +36,8 @@
 
 (Module cli
   "The non-REPL entry — describe a project's declared design, check the code against it, report
-   how far one region of it still has to go, look at one view of it, or serve it to a browser."
+   how far one region of it still has to go, look at one view of it or of one plane its producers
+   read, or serve it to a browser."
   (Operation findings
     "`check`'s violations with every offender eid resolved to its name — the shape a consumer
      that never loaded the model can act on. Offenders stay TUPLES: a law binding an edge

@@ -135,17 +135,22 @@ dialect/extraction plugins), and `reflect/` (reflection) — see "The fukan.comm
 It loads via the `fukan.common` index ns (a *require*), not by discovery. `src/fukan/` is kernel
 mechanics + the build pipeline + the three plug-points (extraction, typing, render) only.
 
-**The browser explorer** is `(explore)` in the cockpit. It draws the DECLARED DESIGN only —
-no extracted node, no drift. Three pieces, each ignorant of the next one up:
+**The browser explorer** is `(explore)` in the cockpit. It draws the DECLARED DESIGN, or — when
+a view names a PLANE (`plane=domain`) — the nodes the producers put on that plane, and never the
+two together: a view has ONE UNIVERSE (`view/universe`), so no node or edge of another plane, and
+no drift, appears in it. The cockpit's held model holds every plane; the CLI's `view` and
+`explore` build the declaration alone unless given `--plane`, which builds with the registered
+producers over `src`. Views that put the domain beside the code (which namespace speaks which
+vocabulary) are a later unit. Three pieces, each ignorant of the next one up:
 - `canvas/projection/view.clj` — `view-graph`: (db, a view spec, the opened paths) → the visible
   nodes and edges as data. A view spec NAMES relations (which nest, which are drawn as edges)
-  plus an optional selection; the namespace names no sort and no relation, so any vocabulary
-  draws. An occurrence is a PATH of entity ids (a node with two containers appears twice; eids
+  plus an optional plane and an optional selection; the namespace names no sort, no relation
+  and no plane, so any vocabulary on any plane draws. An occurrence is a PATH of entity ids (a node with two containers appears twice; eids
   never reach the wire, they change per build); an edge whose end is hidden is CARRIED by the
   closed box around it. A declared node the nesting relations neither contain nor give members
   is UNPLACED: left out of the root level and counted by sort in the answer (`:unplaced true`
-  in the spec draws them). ⚠ Placement is judged over the whole declared design, never over the
-  selection — judging it over the selection makes every module "unplaced" the moment a
+  in the spec draws them). ⚠ Placement is judged over the whole universe (the declared design,
+  or the one plane), never over the selection — judging it over the selection makes every module "unplaced" the moment a
   selection drops its operations. A spec may be ROOTED (`:root`, an entity id): that node's
   direct members become the root level, and nothing outside it — node or edge — is drawn.
 - `web/explorer.clj` — the HTTP side and the one place a request is parsed (`address` writes
@@ -160,7 +165,8 @@ no extracted node, no drift. Three pieces, each ignorant of the next one up:
 - `resources/public/explorer.{html,js}` — the page. It DRAWS NOTHING: it shows the SVG
   `api/drawing` answers and says only which box is selected (a class on that box's group, whose
   paint the SVG carries). Its address holds the view as the request's own parameters — `nest`,
-  `link`, `select`, `open`, `unplaced`, `root` — sent as held; `trail`, `sel` and `embed` are the
+  `link`, `select`, `open`, `unplaced`, `root`, `plane` — sent as held, the plane with a
+  declaration request too; `trail`, `sel` and `embed` are the
   page's alone.
   It requests only RELATIVE urls, so a host may serve it under a path prefix (forwarding `api/*`
   and `explorer.js` beneath it); `embed=1` drops its own title for use in an iframe.
@@ -364,8 +370,8 @@ SPECIALIZED vocabulary + its mechanism together, not scattered into general voca
   VIEW and nowhere else: matching vocabulary keywords across a codebase was measured on brian
   and is wrong (1,234 of 1,977 mentions sat in namespaces that never use Lexicon). The
   composition root merges its roots with the Clojure extractor's, each under its own PLANE
-  label (`"code"`, `"domain"` — see BRIDGES AND PLANES below). The explorer still draws
-  authored nodes only, so it does not draw the domain plane.
+  label (`"code"`, `"domain"` — see BRIDGES AND PLANES below). The explorer draws the domain plane in a view
+  that names it (`plane=domain`).
 
 **THE ONE WAY, AND ITS REFERENCE (`reference/shop`, 2026-11-19).** One expression language for
 the shapes that flow through a system, used at three altitudes: the domain declares it

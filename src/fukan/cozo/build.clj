@@ -191,6 +191,19 @@ alle[e] := *t_bool[e, _, _]
                                   (fn [ts] (mapv #(if (sub/instance-value? %) (in-plane plane %) %) ts))))
                         cs))))))
 
+(defn ^:test-support plane-vars->cozo
+  "Build a Cozo substrate from `design-vars` plus, for each `[label vars]` of `planes`, those vars
+   produced on that plane — stamped and labelled as `model->cozo` stamps a producer's roots, so a
+   test can place a node on a plane without running a producer. Returns the open db, grammar
+   reflected."
+  [design-vars planes]
+  (-> (mirror/load-datoms
+       (instances->datoms
+        (concat (roots-of design-vars)
+                (for [[plane vars] planes, [id iv] (roots-of vars)]
+                  [id (in-plane plane (sub/stamp-stratum iv))]))))
+      (with-grammar nil)))
+
 (defn ^{:malli/schema [:=> [:cat [:vector :symbol] :map] :CozoDb]}
   model->cozo
   "Native FULL build: the instance-vars of canvas `ns-syms` + the

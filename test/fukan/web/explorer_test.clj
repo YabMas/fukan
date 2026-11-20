@@ -182,7 +182,10 @@
       (is (not (re-find #"g\.box[^{]*\{[^}]*(fill|stroke)" page))))
     (testing "it asks for the drawing, with the address's own view parameters"
       (is (re-find #"api/drawing" script))
-      (is (re-find #"\['nest', 'link', 'select', 'open', 'unplaced', 'root'\]" script)))
+      (is (re-find #"\['nest', 'link', 'select', 'open', 'unplaced', 'root', 'plane'\]" script)))
+    (testing "the plane goes with a declaration request too, and the page names no plane"
+      (is (re-find #"asked\.set\('plane', state\.plane\)" script))
+      (is (not (re-find #"'domain'|\"domain\"|'code'|\"code\"" (str page script)))))
     (testing "the root is read from the address as one id, and an array root is replaced first"
       (is (re-find #"root: q\.get\('root'\) \|\| ''" script))
       ;; Every reading of the address — at load, on Back/Forward, for each request — is
@@ -195,3 +198,43 @@
       (is (= 1 (count (re-seq #"new URLSearchParams\(location\.search\)" script)))))
     (testing "no sort and no relation of fukan's vocabulary is written in either"
       (is (not (re-find #"Module|Subsystem|Operation|may-depend|\(Band" (str page script)))))))
+
+;; ── a plane ──────────────────────────────────────────────────────────────────
+
+(defn- planed-db
+  "mid and low produced on plane \"attic\"; high declared."
+  []
+  (build/plane-vars->cozo [#'high] {"attic" [#'mid #'low]}))
+
+(def ^:private mid-id (str (ns-name *ns*) "/mid"))
+
+(deftest a-plane-is-parsed-once-and-must-be-one-the-model-holds
+  (let [parsed (fn [params] (explorer/parse-request (planed-db) (assoc params "nest" "xholds")))]
+    (is (= "attic" (:plane (second (parsed {"plane" "attic"})))))
+    (is (not (contains? (second (parsed {})) :plane)) "no plane, no key: the declared design")
+    (is (re-find #"plane.*cellar" (second (parsed {"plane" "cellar"})))
+        "a plane the model does not hold is refused, named")
+    (is (re-find #"plane" (second (parsed {"plane" ""}))) "present with no value is refused")))
+
+(deftest a-graph-of-a-plane-is-answered-from-that-plane
+  (let [[tag g] (:answer (explorer/answer planed-db {"nest" "xholds" "plane" "attic"}))]
+    (is (= :graph tag))
+    (is (= ["mid"] (map :label (:nodes g)))))
+  (let [[tag g] (:answer (explorer/answer planed-db {"nest" "xholds"}))]
+    (is (= :graph tag))
+    (is (= [] (:nodes g)) "high's only member is the attic's, so the declared design places nothing")
+    (is (= [{:sort "fukan.web.explorer-test/XShelf" :count 1}] (:unplaced g)))))
+
+(deftest a-declaration-is-answered-within-the-plane-asked
+  (is (= :declaration (first (:answer (explorer/declaration planed-db {"id" mid-id "plane" "attic"})))))
+  (is (= [:missing] (:answer (explorer/declaration planed-db {"id" mid-id})))
+      "a produced node is missing to a request naming no plane")
+  (is (= [:missing] (:answer (explorer/declaration planed-db {"id" high-id "plane" "attic"})))
+      "and a declared node to one naming a plane")
+  (is (= [:missing] (:answer (explorer/declaration planed-db {"id" mid-id "plane" "cellar"})))
+      "every node is missing to a plane the model does not hold")
+  (is (= :rejected (first (:answer (explorer/declaration planed-db {"id" mid-id "plane" ""}))))))
+
+(deftest the-planes-on-offer-are-answered-with-the-relations
+  (is (= [{:name "attic" :nodes 2}] (:planes (second (:answer (explorer/choices planed-db))))))
+  (is (= [] (:planes (second (:answer (explorer/choices db)))))))

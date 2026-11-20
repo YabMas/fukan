@@ -27,11 +27,10 @@
             [canvas.architecture.projection.view :as view]
             [canvas.architecture.projection.drawing :as drawing]
             [canvas.architecture.projection.instance :as instance]
-            [canvas.architecture.projection.design :as design]
             [canvas.architecture.cozo.query :as query]))
 
 (Module explorer
-  "Serve the declared design of whatever model a caller supplies as a navigable page."
+  "Serve the declared design, or one plane, of whatever model a caller supplies as a navigable page."
   (Kind GraphRequest
     "A graph request once parsed: a ViewSpec, the open paths and the palette to paint in — light
      when the request names none — or the reason it was refused: a malformed parameter, a palette
@@ -75,8 +74,9 @@
                [:tuple [:enum :no-model]]]]])
   (Kind DeclarationAnswer
     "What a request for one node's declaration is answered with: the time the model was read for
-     it, and the node's sort and authored form, a refusal of a request naming no node, that the
-     model declares no such node, or that no model is loaded."
+     it, and the node's sort and form, a refusal of a request naming no node, that the universe
+     of the request's plane — the declared design when it names none — holds no such node, or
+     that no model is loaded."
     [:map
      [:at :string]
      [:answer [:or
@@ -116,11 +116,12 @@
      :delegates [view/views]})
   (Operation declaration
     "Answer a request for one node's declaration against the model `model` yields now: the node,
-     named by its entity id, as its sort and authored form — only if the design declares it."
+     named by its entity id, as its sort and form — only if the universe of the plane the request
+     names, or the declared design when it names none, holds it."
     {:signature [:=> [:catn [:model [:=> [:cat] [:maybe substrate/StructureDb]]]
                             [:params [:map-of :string :string]]] DeclarationAnswer]
      :performs  [:throws :state]
-     :delegates [design/declared-nodes instance/instance-text query/q]})
+     :delegates [view/universe instance/instance-text query/q]})
   (Operation start
     "Start serving on `port`, reading the model through `model` on each request. Returns the handle
      `stop` takes. `model` may yield nothing, which a request answers as 'no model loaded'."
