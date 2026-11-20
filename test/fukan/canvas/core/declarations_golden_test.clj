@@ -546,7 +546,12 @@
 ;; two (a guard is part of what a function accepts, +2), and `signature-differs` trades its
 ;; kind-inequality body for the two that say "one arity against several" (+1). `speaks-of`
 ;; keeps its four bodies and reads `schema-part+` where it read `of+`, so the hash moves there.
-(def ^:private golden-terms {:count 281 :hash -841031858})
+;; 2026-11-19 (a system speaks more than one language): the Lexicon producer's `Vocabulary` —
+;; the language of one domain, owning its shapes and drawing on the vocabularies it uses — and
+;; the relations reading which vocabulary a signature speaks. Terms 281→295 (+14), none removed:
+;; the sort's kind rule; `declares-shape` and `draws-on`, each a slot rule and a two-bodied
+;; closure (+6); `word-of` and its closure (+3); `speaks`, two bodies, and its closure (+4).
+(def ^:private golden-terms {:count 295 :hash -595753671})
 ;; 2026-09-22 (later still): every authored law in the shipped vocabulary carries a stable `:key`
 ;; — Region, Band, Subsystem, Stratum, Kind and the malli dialect were reachable only by matching
 ;; their DESCRIPTION, which goes silently green when the sentence is reworded and silent altogether
@@ -560,7 +565,13 @@
 ;; 2026-11-19 (the dialect reads all of malli): laws 119→122, all generated — the target-type
 ;; check of `Schema :entry` and the type checks of the two `:props` leaves (`Schema`,
 ;; `SchemaField`). The hash also moves on `SchemaChoice :kind`, whose enum gained "edn".
-(def ^:private golden-laws  {:count 122 :hash 578324320})
+;; 2026-11-19 (a system speaks more than one language): laws 122→124, the target-type checks of
+;; `Vocabulary`'s two slots (`:declares-shape`, `:draws-on`); the producer still authors none.
+;; 2026-11-19 (a library's view has no namespace node): `View :declared-in` targets `Ns` or
+;; `Vocabulary` — a view a classpath library declares is declared in its vocabulary, since the
+;; library's code is not extracted. Count unchanged; the hash moves on that slot's target-type
+;; check, which now checks the disjunction.
+(def ^:private golden-laws  {:count 124 :hash -383394633})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

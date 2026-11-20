@@ -49,6 +49,31 @@ spelled identically in three places:
    attribute embedding it (`:customer/address`).
 6. Two uses may each have a `summary`: `:checkout/summary` and `:billing/summary` are two names.
 
+## Several languages
+
+A system speaks more than one language. The shop's own vocabulary (`shop.domain`, named
+`:shop`) is the language of selling. How a request is handled is a domain of its own, with a
+language of its own, and the shop takes it from a library shared between systems,
+`reference/web` (named `:web`).
+
+- **Ownership.** Each vocabulary owns its shapes, and a name has one owner. A shape that two
+  vocabularies declare is refused, by Lexicon when the code loads and by fukan when it reads
+  the source. So is a second vocabulary under a name already taken. Nothing is ever merged.
+- **References.** The shop's vocabulary `:uses` web's. That lets a shop entity refer to a web
+  entity by its one name: a `Login` holds `:login/session` (a `:web.session`) beside
+  `:login/customer`.
+- **What references cost.** A vocabulary shared between systems cannot refer to any one
+  system's entity, so web has no way to say which customer a session belongs to. The shop says
+  it instead, with an entity of its own (`Login`). A second name for one entity (an alias) is
+  deferred until references are shown to fall short.
+- **Where the languages meet.** fukan reads, from signatures alone, which namespace speaks which
+  language (`lexicon/languages`) and which functions speak more than one
+  (`lexicon/translators`). Here only `shop.front`'s two functions do: a request comes in, and
+  what the shop understands goes out. Both are readings, not laws.
+- **The library on the classpath.** fukan's check takes one `--src`. It finds web's vocabulary
+  on the classpath and reads it as forms, together with the views declared in the same file.
+  web's code is web's own to check, and is not extracted here.
+
 ## Not settled
 
 - A thing that flows but is no part of the domain (a clock, a connection) has no spelling here

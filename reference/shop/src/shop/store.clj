@@ -27,6 +27,15 @@
                      :own  (get row key)
                      :path (get-in @facts [(keyword (namespace key)) (get row via) key]))])))))
 
+(mx/defn find-one :- [:maybe [:map-of :keyword :any]]
+  "The one entity whose attribute `attribute` holds `value`, as the view named `view` selects
+   it; nothing when there is none."
+  [view :- :keyword, attribute :- :keyword, value :- :any]
+  (let [root (lexicon/root-of (install/view view))
+        id   (keyword (name root) "id")]
+    (some (fn [row] (when (= value (get row attribute)) (pull view (get row id))))
+          (vals (get @facts root)))))
+
 (mx/defn clear! :- :nil
   "Forget everything."
   []

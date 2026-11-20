@@ -71,9 +71,19 @@
    `:embeds` it."
   {:attribute [:* Attribute]})
 
+(defstructure Vocabulary
+  "One vocabulary: the language of ONE domain — a business, or how a request is handled — as
+   the shapes it declares. Its name is the one it was given (`shop`), or the var holding it
+   when it was given none. `:draws-on` are the vocabularies it uses: the ones whose entities
+   its own shapes may refer to. A shape has one vocabulary; a name has one owner."
+  {:declares-shape [:* Entity Value]
+   :draws-on       [:* Vocabulary]})
+
 (defstructure View
   "One declared view: the attributes ONE USE of the vocabulary requires, and the namespace that
-   declares it. Its name is the qualified keyword it is declared under, without the colon
+   declares it — or, for a view a library on the classpath declares, the vocabulary it is a view
+   of: the library's words enter the model and its code does not, so it has no namespace node.
+   Its name is the qualified keyword it is declared under, without the colon
    (`checkout/receipt`) — its whole identity, as an attribute's is, so two uses may each have a
    `summary`. A view declared with no name (`lexicon.core/view`, held in a var or spliced into
    another) is not in the model: nothing outside its scope could name it.
@@ -84,7 +94,7 @@
    view built from something other than a literal selection selects nothing here; it is still
    emitted, since a view nobody could read is worth seeing as one."
   {:selects     [:set Attribute]
-   :declared-in Ns}
+   :declared-in [{} Ns Vocabulary]}
   (sub NamedType))                    ; a signature may name it: `:checkout/receipt` where a shape passes
 
 (defstructure ViewUse
@@ -111,11 +121,19 @@
   [(selects ?v ?a) (attribute ?e ?a)])
 
 (defrelation :ns-reads
-  "Namespace ?ns declares a view reading entity ?e — where the domain's language meets the code's
-   structure. Read against where namespaces sit (a Region, a Band, a Module), it is the context
-   map: which part of the system depends on knowing which part of the domain."
+  "Namespace ?ns (or, for a library's view, its vocabulary) declares a view reading entity ?e —
+   where the domain's language meets the code's structure. Read against where namespaces sit (a
+   Region, a Band, a Module), it is the context map: which part of the system depends on knowing
+   which part of the domain."
   [?ns ?e]
   [(declared-in ?v ?ns) (view-reads ?v ?e)])
+
+;; ── which language is spoken where ───────────────────────────────────────────
+
+(defrelation :word-of
+  "Attribute ?a is a word of vocabulary ?voc: an attribute of a shape it declares."
+  [?a ?voc]
+  [(declares-shape ?voc ?s) (attribute ?s ?a)])
 
 ;; ── what a function actually reads ───────────────────────────────────────────
 
@@ -172,6 +190,13 @@
   [?x ?v ?y]
   [(signature ?x ?s1) (signature-out ?s1 ?t) (names-type ?t ?v) (is ?v ::View)
    (signature ?y ?s2) (signature-in ?s2 ?u) (names-type ?u ?v)])
+
+(defrelation :speaks
+  "?x's signature is written, in part, in vocabulary ?voc: it takes or gives one of its words.
+   Something speaking two vocabularies stands where they meet."
+  [?x ?voc]
+  [(takes-attribute ?x ?a) (word-of ?a ?voc)]
+  [(gives-attribute ?x ?a) (word-of ?a ?voc)])
 
 ;; ── finding the declarations ────────────────────────────────────────────────
 ;; Nothing is configured. A project declares its vocabulary with `lexicon.core/vocabulary` and
@@ -246,13 +271,47 @@
 ;; ── reading the vocabulary ───────────────────────────────────────────────────
 
 (defn- ns-file
-  "The source file of the namespace named `n` under `paths`, by the path a namespace has."
+  "The source of the namespace named `n`, by the path a namespace has: a file under `paths`,
+   or failing that a resource on the classpath — which is where a LIBRARY's vocabulary is, when
+   a project uses one. It is read as forms like any other and never loaded."
   [paths n]
   (let [rel (-> n (str/replace "." "/") (str/replace "-" "_"))]
-    (first (for [p paths, ext [".clj" ".cljc"]
-                 :let [f (io/file p (str rel ext))]
-                 :when (.isFile f)]
-             f))))
+    (or (first (for [p paths, ext [".clj" ".cljc"]
+                     :let [f (io/file p (str rel ext))]
+                     :when (.isFile f)]
+                 f))
+        (some #(io/resource (str rel %)) [".clj" ".cljc"]))))
+
+(defn- vocabulary-declarations
+  "The vocabularies `file` declares, one per `vocabulary` call: `{:id :var :name :listed :uses
+   :file :call}`. `:id` is the call's own identity — its file and its place among the file's
+   calls — since one var may hold several. `:var` is the top-level var the call sits in, as
+   `[namespace name]`, which is how another vocabulary's `:uses` names it."
+  [file]
+  (map-indexed
+   (fn [i d] (assoc d :id [(:path file) i]))
+   (for [form (:forms file)
+         :let [bound (when (and (seq? form) (= 'def (first form)) (symbol? (second form)))
+                       (str (second form)))]
+         call (->> (tree-seq inside inside form)
+                   (filter #(and (seq? %) (= [library "vocabulary"] (qualify file (first %))))))
+         :let [listed (second call)
+               opts   (nth call 2 nil)
+               _      (when-not (and (vector? listed) (every? symbol? listed))
+                        (unreadable file call "a vocabulary from a literal vector of shape names"))
+               _      (when-not (or (nil? opts)
+                                    (and (map? opts)
+                                         (or (nil? (:name opts)) (keyword? (:name opts)))
+                                         (or (nil? (:uses opts))
+                                             (and (vector? (:uses opts)) (every? symbol? (:uses opts))))))
+                        (unreadable file call "a vocabulary's options from a literal map, `:uses` a vector of names"))
+               var    [(str (:ns file)) (or bound (str "@" (:line (meta call))))]]]
+     {:var    var
+      :name   (if-let [n (:name opts)] (subs (str n) 1) (str/join "/" var))
+      :listed listed
+      :uses   (vec (:uses opts))
+      :file   file
+      :call   call})))
 
 (defn- shape-declaration
   "The `def` named `sym-name` in `file`, read as an entity or value shape — `{:shape :value? :doc
@@ -296,6 +355,7 @@
 (defn- attribute-id [k] (str k))
 (defn- shape-id [n] (str ":" n))
 (defn- view-id [k] (str "view" k))
+(defn- vocabulary-id [n] (str "vocabulary:" n))
 
 (defn- vocabulary-roots
   "The Entity, Value and Attribute roots of the shape declarations `decls`, and the set of
@@ -346,14 +406,17 @@
 (defn- view-roots
   "The View roots `file` declares: one per name of each `views` call's map. The attributes a
    view selects are the vocabulary keywords its selection mentions — a selection that is not a
-   literal (a var, a call building one) selects nothing here, and the view is still emitted."
-  [attributes file]
+   literal (a var, a call building one) selects nothing here, and the view is still emitted.
+   `declared-in` gives, for the file and the call, the id of the node the view is declared in."
+  [attributes declared-in file]
   (for [call (calls-of "views" file)
         :let [named (nth call 2 nil)
+              home  (declared-in file call)
               _     (when-not (map? named)
                       (unreadable file call "named views from a literal map of name to selection"))]
         [k selection] named
         :when (qualified-keyword? k)]
+    ^{:at (str (:path file) ":" (:line (meta call)))}
     [(view-id k)
      (sub/->InstanceValue
       ::View (subs (str k) 1) nil nil
@@ -361,7 +424,7 @@
         :targets (->> (tree-seq inside inside selection)
                       (filter #(and (keyword? %) (attributes %)))
                       distinct (sort-by str) (mapv (comp sub/->Ref attribute-id)))}
-       {:rk :declared-in :card :one :targets [(sub/->Ref (str (:ns file)))]}]
+       {:rk :declared-in :card :one :targets [(sub/->Ref home)]}]
       false)]))
 
 (defn- function-body
@@ -401,12 +464,17 @@
    with the Clojure extractor's over the same paths (`fukan.infra.model` does that).
 
    Only files that could hold a declaration are read: one whose text names the library, then
-   the namespaces a vocabulary lists its shapes from, then — for the uses — one whose text
-   names a declared view. What cannot be read THROWS rather than being left out: a vocabulary
-   listed some other way than as a literal vector of names, a name that is no literal `[:map …]`,
-   a `views` call whose map is not a literal. A shape missing from the model would make every
-   view of it read as selecting nothing, and nothing would say why; and Lexicon's own rule is
-   that a declaration is a literal form readable without loading the code."
+   the namespaces a vocabulary lists its shapes from, then the namespace of each vocabulary one
+   of them `:uses` (under `paths` or on the classpath — a library's words are part of what a
+   project's signatures are written in; every vocabulary and view that file declares is read
+   with it, and a library's views are read there and nowhere else), then — for the uses — one
+   whose text names a declared view. What cannot be read THROWS rather than being left out: a
+   vocabulary listed some other way than as a literal vector of names, a name that is no
+   literal `[:map …]`, a `views` call whose map is not a literal, a used vocabulary that cannot
+   be found or whose var holds more than one, a shape or a view name two declarations share. A
+   shape missing from the model would make every view of it read as selecting nothing, and
+   nothing would say why; and Lexicon's own rule is that a declaration is a literal form
+   readable without loading the code."
   [paths]
   (let [sources  (vec (mapcat source-files paths))
         text     (memoize (fn [f] (slurp f)))
@@ -416,20 +484,90 @@
                        (throw (ex-info (str "the Lexicon producer could not read " f)
                                        {:unreadable (str f)}))))
         by-ns    (into {} (map (juxt (comp str :ns) identity)) files)
-        file-of  (fn [n] (or (by-ns n) (some-> (ns-file paths n) read)))
-        decls    (->> (for [file files
-                            call (calls-of "vocabulary" file)
-                            :let [listed (second call)
-                                  _      (when-not (and (vector? listed) (every? symbol? listed))
-                                           (unreadable file call "a vocabulary from a literal vector of shape names"))]
-                            sym  listed
-                            :let [[n nm] (qualify file sym)]]
-                        (or (some-> (file-of n) (shape-declaration nm))
-                            (unreadable file call (str "each shape from a literal `[:map …]` in a def, and `"
-                                                       sym "` is none it can find"))))
-                      (reduce (fn [acc d] (if (some #(= (:var d) (:var %)) acc) acc (conj acc d))) []))
+        ;; a namespace not under `paths` is a resource on the classpath, and marked as one: the
+        ;; model holds no namespace node for it, since its code is not extracted
+        file-of  (memoize (fn [n] (or (by-ns n)
+                                      (when-let [f (ns-file paths n)]
+                                        (cond-> (read f)
+                                          (not (instance? java.io.File f)) (some-> (assoc :classpath? true)))))))
+        ;; the declarations a var holds — one var may hold several calls, each its own vocabulary
+        held     (fn [v] (when v (filter #(= v (:var %)) (some-> (file-of (first v)) vocabulary-declarations))))
+        used     (fn [file call sym]
+                   (let [ds (held (qualify file sym))]
+                     (if (= 1 (count ds))
+                       (first ds)
+                       (unreadable file call
+                                   (str "each used vocabulary from a var holding exactly one, and `"
+                                        sym "` holds " (count ds))))))
+        ;; the files holding the words: those under `paths`, then — to a fixpoint — the file of each
+        ;; vocabulary one of theirs uses. A FILE is what is followed, so every vocabulary and every
+        ;; view a reached file declares enters the model together, the used one or not: the views
+        ;; are read from these same files, and none of them can name a vocabulary left out
+        holders  (loop [found (into {} (map (juxt :path identity)) files)
+                        todo  (vals found)]
+                   (if-let [f (first todo)]
+                     (let [wanted (->> (for [v (vocabulary-declarations f), sym (:uses v)]
+                                         (:file (used f (:call v) sym)))
+                                       (remove #(found (:path %)))
+                                       (map (juxt :path identity))
+                                       (into {}) vals)]
+                       (recur (into found (map (juxt :path identity)) wanted)
+                              (concat (rest todo) wanted)))
+                     (vals found)))
+        ;; keyed by each call's own identity, so no two calls fold into one before ownership is checked
+        vocabs   (into {} (map (juxt :id identity)) (mapcat vocabulary-declarations holders))
+        shapes   (fn [v]
+                   (for [sym (:listed v)
+                         :let [[n nm] (qualify (:file v) sym)]]
+                     (or (some-> (file-of n) (shape-declaration nm))
+                         (unreadable (:file v) (:call v)
+                                     (str "each shape from a literal `[:map …]` in a def, and `"
+                                          sym "` is none it can find")))))
+        spell    (fn [v] (str (str/join "/" (:var v)) " (" (:path (:file v)) ":" (:line (meta (:call v))) ")"))
+        _        (doseq [[n vs] (group-by :name (vals vocabs)) :when (next vs)]
+                   (throw (ex-info (str "the vocabulary " n " is declared twice, by "
+                                        (str/join " and " (map spell vs))
+                                        " — a name has one owner")
+                                   {:vocabulary n :declarations (mapv :var vs)})))
+        declared (into {} (map (fn [v] [(:id v) (vec (shapes v))])) (vals vocabs))
+        ;; one owner per shape name, however the second claim is spelled: two vocabularies listing
+        ;; the same var claim it as surely as two vars sharing a key namespace do
+        _        (doseq [[shape ds] (group-by :shape (for [v (vals vocabs), d (declared (:id v))]
+                                                      (assoc d :by (:name v))))
+                         :when (next ds)]
+                   (throw (ex-info (str "the shape " shape " is declared twice, "
+                                        (str/join " and " (map #(str "by vocabulary " (:by %) " listing "
+                                                                     (str/join "/" (:var %)))
+                                                               ds))
+                                        " — a name has one owner")
+                                   {:shape shape :declarations (mapv #(select-keys % [:by :var]) ds)})))
+        decls    (mapcat val declared)
         {:keys [attributes roots]} (vocabulary-roots decls)
-        views    (vec (mapcat #(view-roots attributes %) files))
+        owned    (for [v (vals vocabs)]
+                   [(vocabulary-id (:name v))
+                    (sub/->InstanceValue
+                     ::Vocabulary (:name v) nil nil
+                     (cond-> [{:rk :declares-shape :card :many
+                               :targets (mapv (comp sub/->Ref shape-id :shape) (declared (:id v)))}]
+                       (seq (:uses v))
+                       (conj {:rk :draws-on :card :many
+                              :targets (mapv #(sub/->Ref (vocabulary-id (:name (used (:file v) (:call v) %))))
+                                             (:uses v))}))
+                     false)])
+        ;; a view is declared in its namespace — or, read from a library on the classpath, whose
+        ;; namespace the model does not hold, in the vocabulary it is a view of
+        declared-in (fn [file call]
+                      (if (:classpath? file)
+                        (vocabulary-id (:name (used file call (second call))))
+                        (str (:ns file))))
+        views    (vec (mapcat #(view-roots attributes declared-in %) holders))
+        ;; one owner per view name too: two declarations of one view keyword are a collision, never
+        ;; two roots of one id for assembly to merge
+        _        (doseq [[id vs] (group-by first views) :when (next vs)]
+                   (throw (ex-info (str "the view " (subs id 5) " is declared twice, at "
+                                        (str/join " and " (map (comp :at meta) vs))
+                                        " — a name has one owner")
+                                   {:view (subs id 5) :declarations (mapv (comp :at meta) vs)})))
         names    (set (map (fn [[_ iv]] (keyword (:name iv))) views))
         spelled  (map str names)
         users    (when (seq names)
@@ -438,7 +576,7 @@
                          :let  [file (read f)]
                          :when file]
                      file))]
-    {:roots (vec (concat roots views (mapcat #(use-roots names %) users)))}))
+    {:roots (vec (concat roots owned views (mapcat #(use-roots names %) users)))}))
 
 ;; ── readings ─────────────────────────────────────────────────────────────────
 
@@ -459,8 +597,8 @@
 
 (defn context-map
   "Which namespaces declare views reading which entities, as a set of `[namespace entity]` name
-   pairs. Grouped by whatever a project groups its namespaces by, it is that project's context
-   map — derived, with nothing authored to keep in step."
+   pairs — a view a library on the classpath declares is counted under its vocabulary's name.
+   Grouped by whatever a project groups its namespaces by, it is that project's context map — derived, with nothing authored to keep in step."
   [db]
   (set (cq/q '[:find ?nn ?en :in $ %
                :where (ns-reads ?ns ?e) [?ns :entity/name ?nn] [?e :entity/name ?en]]
@@ -478,23 +616,49 @@
 
 (defn unread-claims
   "Functions whose signature GIVES an attribute of an entity they neither reach nor are handed
-   any attribute of, as a set of `[namespace function entity]` name triples: the signature says
-   the function knows something of the entity, and nothing it reads or takes says how. A
-   reading, not a law — a function may build a value from nothing (a constructor does)."
+   any attribute of, nor reach anything referring to, as a set of `[namespace function entity]`
+   name triples: the signature says the function knows something of the entity, and nothing it
+   reads or takes says how. A reading, not a law — a function may build a value from nothing
+   (a constructor does)."
   [db]
   (set (cq/q '[:find ?nn ?fn ?en :in $ %
                :where (gives-attribute ?f ?a) (attribute ?e ?a) (child ?ns ?f) (is ?ns :fukan.common.extraction.clojure.module/Ns)
                       (not (reaches-entity ?f ?e))
                       (not-join [?f ?e] (takes-attribute ?f ?b) (attribute ?e ?b))
+                      (not-join [?f ?e] (reaches-entity ?f ?g) (entity-references ?g ?e))
                       [?ns :entity/name ?nn] [?f :entity/name ?fn] [?e :entity/name ?en]]
              db (s/vocab-rules))))
 
 (defn attribute-readers
   "The views selecting the attribute named `attribute` (`\"group/name\"`), as a set of
-   `[namespace view]` name pairs — where one piece of the domain's knowledge is asked for."
+   `[namespace view]` name pairs — where one piece of the domain's knowledge is asked for. A
+   library's view is held under its vocabulary's name, as in `context-map`."
   [db attribute]
   (set (cq/q '[:find ?nn ?vn :in $ % ?an
                :where (is ?a ::Attribute) [?a :entity/name ?an]
                       (selects ?v ?a) (declared-in ?v ?ns)
                       [?v :entity/name ?vn] [?ns :entity/name ?nn]]
              db (s/vocab-rules) attribute)))
+
+(defn languages
+  "Which namespaces hold a function whose signature speaks which vocabulary, as a set of
+   `[namespace vocabulary]` name pairs. A namespace speaking one language is inside a domain;
+   one speaking two is where they meet."
+  [db]
+  (set (cq/q '[:find ?nn ?vn :in $ %
+               :where (speaks ?f ?voc) (child ?ns ?f) (is ?ns :fukan.common.extraction.clojure.module/Ns)
+                      [?ns :entity/name ?nn] [?voc :entity/name ?vn]]
+             db (s/vocab-rules))))
+
+(defn translators
+  "The functions whose signature speaks more than one vocabulary, as a map from `[namespace
+   function]` to the set of vocabulary names — the places one domain's language is turned into
+   another's."
+  [db]
+  (->> (cq/q '[:find ?nn ?fn ?vn :in $ %
+               :where (speaks ?f ?voc) (child ?ns ?f) (is ?ns :fukan.common.extraction.clojure.module/Ns)
+                      [?ns :entity/name ?nn] [?f :entity/name ?fn] [?voc :entity/name ?vn]]
+             db (s/vocab-rules))
+       (reduce (fn [m [n f v]] (update m [n f] (fnil conj #{}) v)) {})
+       (filter #(next (val %)))
+       (into {})))

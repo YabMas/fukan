@@ -348,11 +348,14 @@ SPECIALIZED vocabulary + its mechanism together, not scattered into general voca
   adopter's is loaded — into fact sorts: `Entity` (`:attribute`, and `:part` for the entities it
   contains), `Value` (a shape with no identity), `Attribute` (`:kind` stored/ref/many/derived,
   `:refers-to`, `:embeds` the value shapes its schema nests), `View` (`:selects`, `:declared-in`
-  an `Ns`) and `ViewUse`. Facts only, no laws of its own (THE TEST: a model producer adds facts).
-  The derived relations `entity-references`/`view-reads`/`ns-reads` and the readings
-  `domain-map`/`context-map`/`attribute-readers` are its consumers. ⚠ NOTHING IS CONFIGURED
+  an `Ns` — or, for a view a classpath library declares, its `Vocabulary`, since the library's
+  code is not extracted and no namespace node exists for it), `ViewUse`, and `Vocabulary`
+  (`:declares-shape`, `:draws-on`; see SEVERAL VOCABULARIES below). Facts only, no laws of its own (THE TEST: a model producer adds facts).
+  The derived relations `entity-references`/`view-reads`/`ns-reads`/`word-of`/`speaks` and the
+  readings `domain-map`/`context-map`/`attribute-readers`/`languages`/`translators` are its
+  consumers. ⚠ NOTHING IS CONFIGURED
   (since 2026-11-19; `*sources*` is gone): there is ONE way to declare a vocabulary —
-  `(lexicon.core/vocabulary [Shape …])` over a literal vector — and ONE way to name a view —
+  `(lexicon.core/vocabulary [Shape …] {:name … :uses […]}?)` over a literal vector — and ONE way to name a view —
   `(lexicon.core/views vocab {:checkout/receipt [selection] …})` over a literal map — and both
   are calls of the library, recognised through the file's `ns` form. A project wrapping the
   library in makers of its own is read as declaring NOTHING: that is its porting distance, not
@@ -430,6 +433,25 @@ brian's 529 unresolved names would resolve.) What made it work, and what is stil
   stays pure and the producer still recognises its calls inside those.
 - `speaks-of` follows every part of a schema — a map's fields and an `:orn` branch as much as a
   collection's element — through the dialect's `schema-part` (2026-11-19).
+- SEVERAL VOCABULARIES (2026-11-19): a vocabulary is the language of ONE domain, and a system
+  speaks several. Request handling is one in its own right, not plumbing; `reference/web` is
+  that, as a library shared between systems, with its longer namespaces (`:web.request/path`).
+  `(lexicon.core/vocabulary [Shape …] {:name :shop :uses [web/vocabulary]})` is read as a
+  `Vocabulary` fact: `:declares-shape` holds the shapes it lists, `:draws-on` the vocabularies it
+  uses. ⚠ A NAME HAS ONE OWNER: the producer THROWS, naming both declarations, when two
+  vocabularies declare a shape of one name (the SAME var listed twice included) or share a
+  vocabulary name. It never merges. A used vocabulary is followed to a fixpoint, and when it is
+  not under the source paths it is found on the CLASSPATH and read as forms. Only its WORDS
+  enter the model: its shapes and the views declared in its own file — every vocabulary and view
+  that FILE declares, the used one or not, since a view there may be of any of them. A view NAME
+  has one owner as well: two declarations of one view keyword throw. Its code does not, since
+  `--src` is the project's own. REFERENCES FIRST: one vocabulary names another's entity by its
+  one name. Aliases are deferred, `owl:sameAs` is ruled out (that is a `correspond`). The cost
+  is stated in the reference: web cannot say whose a session is, so the shop's `Login` holds
+  both references. `word-of`/`speaks` (a signature takes or gives an attribute of a shape a
+  vocabulary declares) feed two READINGS, `lx/languages` (namespace → vocabularies) and
+  `lx/translators` (functions speaking more than one). No law says which module may speak
+  which vocabulary.
 - ⚠ Not yet: nothing checks a view's namespace against the Module declaring it, nor a design
   Operation's claim against its function's footprint; brian and nido are not ported.
 
