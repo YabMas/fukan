@@ -1,5 +1,6 @@
 {:paths ["src"]
- ;; Lexicon has no published coordinate yet: it is read from a checkout beside fukan's.
+ ;; Lexicon by its git coordinate, so the project builds wherever it is checked out.
  :deps {org.clojure/clojure {:mvn/version "1.11.1"}
         metosin/malli {:mvn/version "0.16.4"}
-        lexicon/lexicon {:local/root "../../../lexicon"}}}
+        lexicon/lexicon {:git/url "https://github.com/YabMas/lexicon.git"
+                         :git/sha "e76d30b2b82988ee29b43fee798165baec472a45"}}}
