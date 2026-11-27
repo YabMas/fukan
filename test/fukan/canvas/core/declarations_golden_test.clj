@@ -551,7 +551,12 @@
 ;; the relations reading which vocabulary a signature speaks. Terms 281→295 (+14), none removed:
 ;; the sort's kind rule; `declares-shape` and `draws-on`, each a slot rule and a two-bodied
 ;; closure (+6); `word-of` and its closure (+3); `speaks`, two bodies, and its closure (+4).
-(def ^:private golden-terms {:count 295 :hash -595753671})
+;; 2026-11-27 (a multi-arity check that pays for its arities, not every arrow): the dialect's
+;; multi-arity comparison reads arity agreement of its own instead of `arrow-agrees` under a
+;; negation, which Cozo evaluates unrestricted. Terms 295→309 (+14), none removed:
+;; `arity-pair` (1 + 2 closure), `arity-differs` (6 + 2), `arity-agrees` (1 + 2).
+;; `signature-differs`' two multi-arity bodies now call `arity-agrees`, so the hash moves there.
+(def ^:private golden-terms {:count 309 :hash -126479015})
 ;; 2026-09-22 (later still): every authored law in the shipped vocabulary carries a stable `:key`
 ;; — Region, Band, Subsystem, Stratum, Kind and the malli dialect were reachable only by matching
 ;; their DESCRIPTION, which goes silently green when the sentence is reworded and silent altogether

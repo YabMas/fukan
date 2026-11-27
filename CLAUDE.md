@@ -107,7 +107,16 @@ structure substrate **is** the model (no separate model-map).
   measured to be: Cozo restricts a rule call by the caller's bindings, so moving calls to the front
   of their bodies took fukan's own 93 laws from 0.87s to 236s. Orienting against head vars is for
   SCORING only — head vars are not treated as bound, or a predicate over them would be emitted ahead
-  of what this body binds and hit the failure above;
+  of what this body binds and hit the failure above.
+  ⚠ BUT NOT ACROSS A NEGATION: whatever a `not`/`not-join` reaches is evaluated over its WHOLE
+  domain — the compiler turns a `not-join` into a helper rule over its join vars, and no caller
+  binding reaches inside it. Measured on nido (2026-11-27): the malli dialect's multi-arity
+  `signature-differs` asked `arrow-agrees` under a `not-join`, which negates `arrow-differs`, so one
+  law paid for every pair of distinct arrow schemas in the model — 114s and ~2 GB of native memory,
+  for an empty answer. Restricting only the negated relation left it at ~100s; giving the negated
+  side bodies of its own, each LED by the pair it may relate (`arity-differs`), took it to 0.5s.
+  So a relation reachable from a negation must carry its own restriction in every body;
+  `fukan.common.typing.signature-scale-test` holds that one;
   `cozo/law.clj` — compiles every defstructure law → CozoScript and registers the
   check-engine plug-point (so `structure/check` runs on Cozo). It also gives each law a WALL-CLOCK
   (`*law-budget-ms*`, 120s): a law that outruns it is abandoned and reported as UNDECIDABLE naming
