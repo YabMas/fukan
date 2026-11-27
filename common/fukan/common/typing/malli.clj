@@ -600,6 +600,44 @@
   [?a ?b]
   [(arrow ?a) (arrow ?b) (not (arrow-differs ?a ?b))])
 
+;; The multi-arity comparison below asks, UNDER A NEGATION, whether an arity has an agreeing
+;; arity on the other side. Cozo restricts a positively-called rule to the caller's bindings, but
+;; not across a negation: whatever a `not`/`not-join` reaches is evaluated over its whole domain.
+;; Reached through `arrow-agrees`, that was `arrow-differs` over EVERY pair of distinct arrow
+;; schemas in the model — measured on nido (~2,200 signature schemas) at 114s and ~2 GB of native
+;; memory for one law, against 0.5s with the bodies below. So arity agreement is a relation of its
+;; own whose every body LEADS with a pair of arities of two function schemas, and the general
+;; arrow relations stay outside every negation in `signature-differs`' cone.
+
+(s/defrelation :arity-pair
+  "?x and ?y are arities of two multi-arity function schemas (`[:function …]`'s `:of` children).
+   The domain arity agreement is decided over: never a pair of arrows that are not both arities."
+  [?x ?y]
+  [[?a :val/kind "function"] [?b :val/kind "function"] (of ?a ?x) (of ?b ?y) (arrow ?x) (arrow ?y)])
+
+(s/defrelation :arity-differs
+  "Two arities of function schemas that do not describe the same function — `arrow-differs`
+   restricted to `arity-pair`, its six bodies restated each led by the pair. Restated rather than
+   called, because a call would put `arrow-differs` under `signature-differs`' negation.
+
+   ⚠ PERMANENT SEAM: the negation in `signature-differs` evaluates this over EVERY arity pair, so
+   the multi-arity check stays quadratic in the number of arities the model's multi-arity function
+   schemas hold together (27 of nido's 2,203 signature schemas are multi-arity). Closing it needs
+   the law to supply the pairs to compare — demand machinery fukan does not have. A defaults chain
+   is better modelled as one arrow with `[:? T]` params, which keeps it out of this product."
+  [?x ?y]
+  [(arity-pair ?x ?y) (arrow-param-at ?x ?i ?t) (not-join [?y ?i ?t] (arrow-param-at ?y ?i ?t))]
+  [(arity-pair ?x ?y) (arrow-param-at ?y ?i ?t) (not-join [?x ?i ?t] (arrow-param-at ?x ?i ?t))]
+  [(arity-pair ?x ?y) (out ?x ?t) (not-join [?y ?t] (out ?y ?t))]
+  [(arity-pair ?x ?y) (out ?y ?t) (not-join [?x ?t] (out ?x ?t))]
+  [(arity-pair ?x ?y) (of ?x ?g) (not-join [?y ?g] (of ?y ?g))]
+  [(arity-pair ?x ?y) (of ?y ?g) (not-join [?x ?g] (of ?x ?g))])
+
+(s/defrelation :arity-agrees
+  "Two arities of function schemas describing the same function — `arrow-agrees` over `arity-pair`."
+  [?x ?y]
+  [(arity-pair ?x ?y) (not (arity-differs ?x ?y))])
+
 (s/defrelation :signature-shaped
   "A schema that can be a signature: one arity, or several."
   [?s]
@@ -619,9 +657,9 @@
   [[?a :val/kind "function"] (arrow ?b)]
   [(arrow-differs ?a ?b)]
   [[?a :val/kind "function"] [?b :val/kind "function"]
-   (of ?a ?x) (not-join [?b ?x] (of ?b ?y) (arrow-agrees ?x ?y))]
+   (of ?a ?x) (not-join [?b ?x] (of ?b ?y) (arity-agrees ?x ?y))]
   [[?a :val/kind "function"] [?b :val/kind "function"]
-   (of ?b ?y) (not-join [?a ?y] (of ?a ?x) (arrow-agrees ?x ?y))])
+   (of ?b ?y) (not-join [?a ?y] (of ?a ?x) (arity-agrees ?x ?y))])
 
 (s/defrelation :signature-type
   "A type a signature mentions at a parameter or result position — directly for an arrow, and
